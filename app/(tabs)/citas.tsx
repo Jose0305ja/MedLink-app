@@ -28,6 +28,16 @@ type Slot = {
   available: boolean;
 };
 
+
+function formatRawDate(dateValue: string) {
+  if (!dateValue) {
+    return '';
+  }
+
+  const rawDate = String(dateValue).split('T')[0];
+  return rawDate;
+}
+
 type AppointmentItem = {
   id: string;
   doctor?: string;
@@ -252,7 +262,7 @@ export default function CitasScreen() {
                   ? `${t('patientLabel')}: ${appointment.patient ?? '-'}`
                   : `${t('doctorLabel')}: ${appointment.doctor ?? '-'}`}
               </Text>
-              <Text>{`${t('dateLabel')}: ${new Date(appointment.date).toLocaleDateString()}`}</Text>
+              <Text>{`${t('dateLabel')}: ${formatRawDate(appointment.date)}`}</Text>
               <Text>{`${t('timeLabel')}: ${appointment.time}`}</Text>
               <Text>{`${t('statusLabel')}: ${appointment.status}`}</Text>
             </View>

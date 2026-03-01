@@ -45,7 +45,8 @@ type TranslationKey =
   | 'patientLabel'
   | 'dateLabel'
   | 'timeLabel'
-  | 'statusLabel';
+  | 'statusLabel'
+  | 'noSlotsForDay';
 
 const translations: Record<Language, Record<TranslationKey, string>> = {
   es: {
@@ -92,6 +93,7 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     dateLabel: 'Fecha',
     timeLabel: 'Hora',
     statusLabel: 'Estado',
+    noSlotsForDay: 'Sin horarios disponibles para este día',
   },
   en: {
     language: 'Language',
@@ -137,6 +139,7 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     dateLabel: 'Date',
     timeLabel: 'Time',
     statusLabel: 'Status',
+    noSlotsForDay: 'No schedules available for this day',
   },
 };
 

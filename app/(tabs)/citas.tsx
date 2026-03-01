@@ -57,6 +57,7 @@ export default function CitasScreen() {
   const [selectedDate, setSelectedDate] = useState('2026-03-05');
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [hasLoadedSchedule, setHasLoadedSchedule] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const loadAppointments = useCallback(async (currentRole: UserRole) => {
@@ -169,6 +170,7 @@ export default function CitasScreen() {
 
       setSlots(Array.isArray(data?.slots) ? data.slots : []);
       setSelectedSlotId(null);
+      setHasLoadedSchedule(true);
     } catch {
       Alert.alert(t('error'), t('networkError'));
     } finally {
@@ -231,6 +233,7 @@ export default function CitasScreen() {
     setSelectedDoctorId(null);
     setSelectedSlotId(null);
     setSlots([]);
+    setHasLoadedSchedule(false);
     await loadDoctors();
   };
 
@@ -290,6 +293,8 @@ export default function CitasScreen() {
           <TextInput value={selectedDate} onChangeText={setSelectedDate} placeholder="2026-03-05" />
 
           <Button title={t('loadSchedule')} onPress={loadSchedule} disabled={isLoading} />
+
+          {hasLoadedSchedule && slots.length === 0 ? <Text>{t('noSlotsForDay')}</Text> : null}
 
           <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {slots.map((slot) => {

@@ -1,6 +1,7 @@
 import { getAuthToken, getCurrentUserRole } from '@/lib/auth-storage';
 import { useI18n } from '@/lib/i18n-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -267,13 +268,8 @@ export default function CitasScreen() {
     }
   };
 
-  const openScheduler = async () => {
-    setShowModal(true);
-    setSelectedDoctorId(null);
-    setSelectedSlotId(null);
-    setSlots([]);
-    setHasLoadedSchedule(false);
-    await loadDoctors();
+  const openScheduler = () => {
+    router.push('/appointments/schedule');
   };
 
   const filteredAppointments = appointments.filter(

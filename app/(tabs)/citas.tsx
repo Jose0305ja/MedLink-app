@@ -2,16 +2,15 @@ import { getAuthToken, getCurrentUserRole } from '@/lib/auth-storage';
 import { useI18n } from '@/lib/i18n-context';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Button,
   Modal,
   Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
@@ -82,6 +81,100 @@ function sanitizeStatus(rawStatus: string): AppointmentStatus {
   return 'programada';
 }
 
+function toIsoDay(dateValue: Date) {
+  return new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate()).toISOString().split('T')[0];
+}
+
+function startOfDay(dateValue: Date) {
+  return new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate());
+}
+
+function isSameDay(leftDate: Date, rightDate: Date) {
+  return startOfDay(leftDate).getTime() === startOfDay(rightDate).getTime();
+}
+
+function buildDateFromTime(selectedDateValue: string, timeValue: string) {
+  const [hoursPart, minutesPart] = timeValue.split(':');
+  const parsedHours = Number.parseInt(hoursPart ?? '0', 10);
+  const parsedMinutes = Number.parseInt(minutesPart ?? '0', 10);
+  const selected = new Date(`${selectedDateValue}T00:00:00`);
+
+  if (Number.isNaN(selected.getTime()) || Number.isNaN(parsedHours) || Number.isNaN(parsedMinutes)) {
+    return null;
+  }
+
+  selected.setHours(parsedHours, parsedMinutes, 0, 0);
+  return selected;
+}
+
+function getDateChipOptions() {
+  const todayStart = startOfDay(new Date());
+  const dayFormat = new Intl.DateTimeFormat('es-ES', { weekday: 'short' });
+  const monthFormat = new Intl.DateTimeFormat('es-ES', { month: 'short' });
+
+  return Array.from({ length: 14 }).map((_, index) => {
+    const currentDate = new Date(todayStart);
+    currentDate.setDate(todayStart.getDate() + index);
+
+    const dayLabel = dayFormat.format(currentDate).replace('.', '');
+    const monthLabel = monthFormat.format(currentDate).replace('.', '');
+
+    return {
+      value: toIsoDay(currentDate),
+      dayLabel: dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1),
+      dayNumber: String(currentDate.getDate()),
+      monthLabel: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
+    };
+  });
+}
+
+
+function getCalendarDays(monthDate: Date) {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstDayOfMonth = new Date(year, month, 1);
+  const startOffset = (firstDayOfMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPreviousMonth = new Date(year, month, 0).getDate();
+
+  const cells: { date: Date; inCurrentMonth: boolean }[] = [];
+
+  for (let i = 0; i < startOffset; i += 1) {
+    const day = daysInPreviousMonth - startOffset + i + 1;
+    cells.push({ date: new Date(year, month - 1, day), inCurrentMonth: false });
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push({ date: new Date(year, month, day), inCurrentMonth: true });
+  }
+
+  while (cells.length % 7 !== 0) {
+    const day = cells.length - (startOffset + daysInMonth) + 1;
+    cells.push({ date: new Date(year, month + 1, day), inCurrentMonth: false });
+  }
+
+  return cells;
+}
+
+function isBeforeToday(dateValue: Date) {
+  return startOfDay(dateValue).getTime() < startOfDay(new Date()).getTime();
+}
+
+function formatSelectedDateLabel(isoDate: string) {
+  const parsed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat('es-ES', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+    .format(parsed)
+    .replace('.', '');
+}
+
 export default function CitasScreen() {
   const { t } = useI18n();
   const [role, setRole] = useState<UserRole | null>(null);
@@ -95,6 +188,9 @@ export default function CitasScreen() {
   const [hasLoadedSchedule, setHasLoadedSchedule] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<AppointmentFilter>('programada');
+  const [showDoctorList, setShowDoctorList] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(startOfDay(new Date()));
 
   const loadAppointments = useCallback(
     async (currentRole: UserRole) => {
@@ -172,50 +268,98 @@ export default function CitasScreen() {
     }
   };
 
-  const loadSchedule = async () => {
-    if (!API_URL) {
-      Alert.alert(t('error'), t('missingApiUrl'));
-      return;
-    }
-
-    if (!selectedDoctorId) {
-      Alert.alert(t('error'), t('doctorRequired'));
-      return;
-    }
-
-    if (!selectedDate) {
-      Alert.alert(t('error'), t('dateRequired'));
-      return;
-    }
-
-    try {
-      const token = await getAuthToken();
-      setIsLoading(true);
-      const response = await fetch(
-        `${API_URL}/doctors/${selectedDoctorId}/schedule?date=${encodeURIComponent(selectedDate)}`,
-        {
-          headers: {
-            Authorization: token ? `Bearer ${token}` : '',
-          },
-        },
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        Alert.alert(t('error'), data?.message ?? t('networkError'));
+  const loadScheduleForSelection = useCallback(
+    async (doctorId: string, dateValue: string, showValidationAlerts = true) => {
+      if (!API_URL) {
+        if (showValidationAlerts) {
+          Alert.alert(t('error'), t('missingApiUrl'));
+        }
         return;
       }
 
-      setSlots(Array.isArray(data?.slots) ? data.slots : []);
-      setSelectedSlotId(null);
-      setHasLoadedSchedule(true);
-    } catch {
-      Alert.alert(t('error'), t('networkError'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      if (!doctorId) {
+        if (showValidationAlerts) {
+          Alert.alert(t('error'), t('doctorRequired'));
+        }
+        return;
+      }
+
+      if (!dateValue) {
+        if (showValidationAlerts) {
+          Alert.alert(t('error'), t('dateRequired'));
+        }
+        return;
+      }
+
+      try {
+        const token = await getAuthToken();
+        setIsLoading(true);
+        const response = await fetch(
+          `${API_URL}/doctors/${doctorId}/schedule?date=${encodeURIComponent(dateValue)}`,
+          {
+            headers: {
+              Authorization: token ? `Bearer ${token}` : '',
+            },
+          },
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          Alert.alert(t('error'), data?.message ?? t('networkError'));
+          return;
+        }
+
+        const backendSlots = Array.isArray(data?.slots) ? data.slots : [];
+        const backendAllSlots = Array.isArray(data?.allSlots) ? data.allSlots : [];
+        const bookedTimes = Array.isArray(data?.bookedTimes)
+          ? data.bookedTimes.filter((time: unknown): time is string => typeof time === 'string')
+          : [];
+
+        const normalizedSlots: Slot[] = backendSlots.length
+          ? backendSlots
+          : backendAllSlots
+              .filter((slot: unknown): slot is Slot =>
+                Boolean(slot && typeof slot === 'object' && 'schedule_id' in slot && 'time' in slot),
+              )
+              .map((slot) => ({
+                ...slot,
+                available: !bookedTimes.includes(slot.time),
+              }));
+
+        const selectedDateObject = new Date(`${dateValue}T00:00:00`);
+        const isTodaySelection = !Number.isNaN(selectedDateObject.getTime()) && isSameDay(selectedDateObject, new Date());
+        const nowWithBuffer = new Date(Date.now() + 10 * 60 * 1000);
+
+        const visibleSlots = normalizedSlots.filter((slot) => {
+          if (!slot.available || bookedTimes.includes(slot.time)) {
+            return false;
+          }
+
+          if (!isTodaySelection) {
+            return true;
+          }
+
+          const slotDateTime = buildDateFromTime(dateValue, slot.time);
+          if (!slotDateTime) {
+            return false;
+          }
+
+          return slotDateTime.getTime() > nowWithBuffer.getTime();
+        });
+
+        setSlots(visibleSlots);
+        setSelectedSlotId(null);
+        setHasLoadedSchedule(true);
+      } catch {
+        Alert.alert(t('error'), t('networkError'));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [t],
+  );
+
 
   const createAppointment = async () => {
     if (!API_URL) {
@@ -273,8 +417,41 @@ export default function CitasScreen() {
     setSelectedSlotId(null);
     setSlots([]);
     setHasLoadedSchedule(false);
+    setShowDoctorList(true);
+    setShowCalendar(false);
+    setCalendarMonth(startOfDay(new Date()));
     await loadDoctors();
   };
+
+  const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null;
+  const dateOptions = useMemo(() => getDateChipOptions(), []);
+  const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
+  const selectedDateLabel = useMemo(() => formatSelectedDateLabel(selectedDate), [selectedDate]);
+
+  useEffect(() => {
+    const selectedParsed = new Date(`${selectedDate}T00:00:00`);
+    if (Number.isNaN(selectedParsed.getTime()) || isBeforeToday(selectedParsed)) {
+      const firstValidDate = dateOptions[0]?.value ?? toIsoDay(new Date());
+      setSelectedDate(firstValidDate);
+      setSelectedSlotId(null);
+      setHasLoadedSchedule(false);
+      setSlots([]);
+    }
+  }, [dateOptions, selectedDate]);
+
+  useEffect(() => {
+    if (selectedSlotId && !slots.some((slot) => slot.schedule_id === selectedSlotId)) {
+      setSelectedSlotId(null);
+    }
+  }, [selectedSlotId, slots]);
+
+  useEffect(() => {
+    if (!showModal || !selectedDoctorId || !selectedDate) {
+      return;
+    }
+
+    loadScheduleForSelection(selectedDoctorId, selectedDate, false);
+  }, [showModal, selectedDoctorId, selectedDate, loadScheduleForSelection]);
 
   const filteredAppointments = appointments.filter(
     (appointment) => sanitizeStatus(appointment.status) === activeFilter,
@@ -371,7 +548,7 @@ export default function CitasScreen() {
                     </View>
                   </View>
 
-                  <View style={[styles.badge, { backgroundColor: badgeStyle.backgroundColor }]}>
+                  <View style={[styles.badge, { backgroundColor: badgeStyle.backgroundColor }]}> 
                     <Text style={[styles.badgeText, { color: badgeStyle.color }]}>
                       {statusLabelMap[normalizedStatus]}
                     </Text>
@@ -400,60 +577,232 @@ export default function CitasScreen() {
       </ScrollView>
 
       <Modal visible={showModal} animationType="slide" onRequestClose={() => setShowModal(false)}>
-        <View style={{ flex: 1, padding: 16, gap: 10 }}>
-          <Text>{t('scheduleAppointment')}</Text>
+        <SafeAreaView style={styles.modalSafeArea}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Pressable onPress={() => setShowModal(false)} style={styles.backButton}>
+                <Ionicons name="chevron-back" size={18} color="#2B3A51" />
+              </Pressable>
+              <Text style={styles.modalTitle}>Agendar Cita</Text>
+              <View style={styles.headerSpacer} />
+            </View>
 
-          <Text>{t('doctorLabel')}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {doctors.map((doctor) => (
-              <Button
-                key={doctor.id}
-                title={doctor.name}
-                onPress={() => setSelectedDoctorId(doctor.id)}
-                disabled={isLoading || selectedDoctorId === doctor.id}
-              />
-            ))}
-          </View>
+            <ScrollView contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.sectionBlock}>
+                <Text style={styles.sectionLabel}>Doctor</Text>
 
-          <Text>{t('selectDate')}</Text>
-          <TextInput value={selectedDate} onChangeText={setSelectedDate} placeholder="2026-03-05" />
+                <View style={styles.doctorCard}>
+                  <View style={styles.doctorAvatar}>
+                    <Ionicons name="person-outline" size={18} color="#8593AA" />
+                  </View>
 
-          <Button title={t('loadSchedule')} onPress={loadSchedule} disabled={isLoading} />
+                  <View style={styles.doctorInfo}>
+                    <Text style={styles.doctorCardName}>{selectedDoctor?.name ?? 'Selecciona un doctor'}</Text>
+                    <Text style={styles.doctorCardSpecialty}>Medicina general</Text>
+                  </View>
 
-          {hasLoadedSchedule && slots.length === 0 ? <Text>{t('noSlotsForDay')}</Text> : null}
+                  <Pressable onPress={() => setShowDoctorList((current) => !current)}>
+                    <Text style={styles.changeDoctorText}>Cambiar</Text>
+                  </Pressable>
+                </View>
 
-          <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {slots.map((slot) => {
-              const isSelected = selectedSlotId === slot.schedule_id;
-              const bgColor = !slot.available ? '#f5b7b1' : isSelected ? '#7fb3d5' : '#d5f5e3';
+                {showDoctorList ? (
+                  <View style={styles.doctorPillsWrap}>
+                    {doctors.map((doctor) => {
+                      const isSelected = doctor.id === selectedDoctorId;
 
-              return (
-                <Pressable
-                  key={slot.schedule_id}
-                  onPress={() => {
-                    if (slot.available) {
-                      setSelectedSlotId(slot.schedule_id);
-                    }
-                  }}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: '#333',
-                    paddingVertical: 8,
-                    paddingHorizontal: 10,
-                    borderRadius: 8,
-                    backgroundColor: bgColor,
-                    opacity: slot.available ? 1 : 0.65,
-                  }}>
-                  <Text>{slot.time}</Text>
-                  <Text>{slot.available ? t('available') : t('occupied')}</Text>
+                      return (
+                        <Pressable
+                          key={doctor.id}
+                          onPress={() => {
+                            setSelectedDoctorId(doctor.id);
+                            setShowDoctorList(false);
+                          }}
+                          disabled={isLoading}
+                          style={[styles.doctorPill, isSelected ? styles.doctorPillSelected : null]}>
+                          <Text style={[styles.doctorPillText, isSelected ? styles.doctorPillTextSelected : null]}>
+                            {doctor.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={styles.sectionBlock}>
+                <Text style={styles.sectionLabel}>Selecciona una fecha</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.dateChipsRow}>
+                  {dateOptions.map((dateOption) => {
+                    const isSelected = selectedDate === dateOption.value;
+
+                    return (
+                      <Pressable
+                        key={dateOption.value}
+                        onPress={() => setSelectedDate(dateOption.value)}
+                        style={[styles.dateChip, isSelected ? styles.dateChipSelected : null]}>
+                        <Text style={[styles.dateChipDay, isSelected ? styles.dateChipDaySelected : null]}>
+                          {dateOption.dayLabel}
+                        </Text>
+                        <Text style={[styles.dateChipNumber, isSelected ? styles.dateChipNumberSelected : null]}>
+                          {dateOption.dayNumber}
+                        </Text>
+                        <Text style={[styles.dateChipMonth, isSelected ? styles.dateChipMonthSelected : null]}>
+                          {dateOption.monthLabel}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                <Pressable onPress={() => setShowCalendar(true)} style={styles.calendarTrigger}>
+                  <Ionicons name="calendar-outline" size={14} color="#2F6CCB" />
+                  <Text style={styles.calendarTriggerText}>Elegir fecha exacta</Text>
                 </Pressable>
-              );
-            })}
-          </ScrollView>
 
-          <Button title={t('confirmAppointment')} onPress={createAppointment} disabled={isLoading} />
-          <Button title={t('close')} onPress={() => setShowModal(false)} />
-        </View>
+                {selectedDateLabel ? <Text style={styles.selectedDateText}>Fecha seleccionada: {selectedDateLabel}</Text> : null}
+
+              </View>
+
+              {hasLoadedSchedule && slots.length === 0 ? <Text style={styles.noSlotsText}>{t('noSlotsForDay')}</Text> : null}
+
+              {slots.length > 0 ? (
+                <View style={styles.slotsGrid}>
+                  {slots.map((slot) => {
+                    const isSelected = selectedSlotId === slot.schedule_id;
+
+                    return (
+                      <Pressable
+                        key={slot.schedule_id}
+                        onPress={() => {
+                          if (slot.available) {
+                            setSelectedSlotId(slot.schedule_id);
+                          }
+                        }}
+                        style={[styles.slotChip, isSelected ? styles.slotChipSelected : null]}>
+                        <Text
+                          style={[
+                            styles.slotTimeText,
+                            isSelected ? styles.slotTimeTextSelected : null,
+                          ]}>
+                          {slot.time}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.slotStateText,
+                            isSelected ? styles.slotStateTextSelected : null,
+                          ]}>
+                          {t('available')}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                onPress={createAppointment}
+                disabled={isLoading || !selectedDate || !selectedSlotId}
+                style={[
+                  styles.confirmButton,
+                  isLoading || !selectedDate || !selectedSlotId ? styles.confirmButtonDisabled : null,
+                ]}>
+                <Text style={styles.confirmButtonText}>{t('confirmAppointment')}</Text>
+              </Pressable>
+
+              <Pressable onPress={() => setShowModal(false)} style={styles.closeTextWrap}>
+                <Text style={styles.closeText}>{t('close')}</Text>
+              </Pressable>
+            </View>
+
+
+          <Modal visible={showCalendar} transparent animationType="fade" onRequestClose={() => setShowCalendar(false)}>
+            <View style={styles.calendarOverlay}>
+              <View style={styles.calendarCard}>
+                <View style={styles.calendarHeader}>
+                  <Pressable
+                    onPress={() =>
+                      setCalendarMonth(
+                        (current) => new Date(current.getFullYear(), current.getMonth() - 1, 1),
+                      )
+                    }
+                    style={styles.calendarArrowButton}>
+                    <Ionicons name="chevron-back" size={18} color="#2B3A51" />
+                  </Pressable>
+                  <Text style={styles.calendarTitle}>
+                    {new Intl.DateTimeFormat('es-ES', {
+                      month: 'long',
+                      year: 'numeric',
+                    }).format(calendarMonth)}
+                  </Text>
+                  <Pressable
+                    onPress={() =>
+                      setCalendarMonth(
+                        (current) => new Date(current.getFullYear(), current.getMonth() + 1, 1),
+                      )
+                    }
+                    style={styles.calendarArrowButton}>
+                    <Ionicons name="chevron-forward" size={18} color="#2B3A51" />
+                  </Pressable>
+                </View>
+
+                <View style={styles.calendarWeekRow}>
+                  {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day) => (
+                    <Text key={day} style={styles.calendarWeekDayLabel}>
+                      {day}
+                    </Text>
+                  ))}
+                </View>
+
+                <View style={styles.calendarGrid}>
+                  {calendarDays.map((cell) => {
+                    const isoValue = toIsoDay(cell.date);
+                    const isSelected = selectedDate === isoValue;
+                    const isDisabled = isBeforeToday(cell.date);
+
+                    return (
+                      <Pressable
+                        key={`${isoValue}-${cell.inCurrentMonth ? '1' : '0'}`}
+                        disabled={isDisabled}
+                        onPress={() => {
+                          setSelectedDate(isoValue);
+                          setSelectedSlotId(null);
+                          setHasLoadedSchedule(false);
+                          setSlots([]);
+                          setShowCalendar(false);
+                        }}
+                        style={[
+                          styles.calendarDay,
+                          !cell.inCurrentMonth ? styles.calendarDayMuted : null,
+                          isSelected ? styles.calendarDaySelected : null,
+                        ]}>
+                        <Text
+                          style={[
+                            styles.calendarDayText,
+                            !cell.inCurrentMonth ? styles.calendarDayTextMuted : null,
+                            isDisabled ? styles.calendarDayTextDisabled : null,
+                            isSelected ? styles.calendarDayTextSelected : null,
+                          ]}>
+                          {cell.date.getDate()}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Pressable onPress={() => setShowCalendar(false)} style={styles.calendarCloseButton}>
+                  <Text style={styles.calendarCloseText}>Cerrar</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
+          </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -631,5 +980,366 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontWeight: '600',
     fontSize: 14,
+  },
+  modalSafeArea: {
+    flex: 1,
+    backgroundColor: '#F7F9FC',
+  },
+  modalContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 6,
+    paddingBottom: 8,
+  },
+  backButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF4FB',
+  },
+  modalTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#172437',
+  },
+  headerSpacer: {
+    width: 30,
+  },
+  modalScrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 150,
+    gap: 24,
+  },
+  sectionBlock: {
+    gap: 12,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    color: '#7E8AA0',
+    fontWeight: '600',
+  },
+  doctorCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#0D1A2A',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  doctorAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EDF2FA',
+  },
+  doctorInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  doctorCardName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1D2739',
+  },
+  doctorCardSpecialty: {
+    fontSize: 12,
+    color: '#A1ADBF',
+    marginTop: 2,
+  },
+  changeDoctorText: {
+    color: '#2F6CCB',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  doctorPillsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  doctorPill: {
+    borderWidth: 1,
+    borderColor: '#E2EAF4',
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  doctorPillSelected: {
+    borderColor: '#326CC6',
+    backgroundColor: '#EAF2FF',
+  },
+  doctorPillText: {
+    color: '#4D5E79',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  doctorPillTextSelected: {
+    color: '#2E67BE',
+    fontWeight: '700',
+  },
+  dateChipsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 2,
+    paddingRight: 8,
+  },
+  dateChip: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5ECF6',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 0,
+  },
+  dateChipSelected: {
+    backgroundColor: '#4E85DD',
+    borderColor: 'transparent',
+    shadowColor: '#2F6CCB',
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  dateChipDay: {
+    color: '#8B98AE',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  dateChipDaySelected: {
+    color: '#E6F0FF',
+  },
+  dateChipNumber: {
+    color: '#2D3D56',
+    fontSize: 19,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  dateChipNumberSelected: {
+    color: '#FFFFFF',
+  },
+  dateChipMonth: {
+    color: '#9AA7BB',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: -1,
+  },
+  dateChipMonthSelected: {
+    color: '#E6F0FF',
+  },
+  noSlotsText: {
+    color: '#7A869B',
+    fontSize: 13,
+    marginTop: -6,
+  },
+  slotsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 10,
+  },
+  slotChip: {
+    width: '31.5%',
+    minHeight: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5ECF6',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+  },
+  slotChipSelected: {
+    borderColor: '#2F6CCB',
+    backgroundColor: '#2F6CCB',
+  },
+  slotTimeText: {
+    color: '#22324A',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  slotStateText: {
+    color: '#A0AEC2',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  slotStateTextSelected: {
+    color: '#FFFFFFB3',
+  },
+  slotTimeTextSelected: {
+    color: '#FFFFFF',
+  },
+  slotTimeTextDisabled: {
+    color: '#98A5BA',
+  },
+  modalFooter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0D1A2A',
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: -3 },
+    elevation: 8,
+  },
+  confirmButton: {
+    height: 56,
+    borderRadius: 20,
+    backgroundColor: '#2F6CCB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0D1A2A',
+    shadowOpacity: 0.14,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  confirmButtonDisabled: {
+    opacity: 1,
+    backgroundColor: '#B9D1F5',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  closeTextWrap: {
+    alignSelf: 'center',
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  closeText: {
+    color: '#7B889D',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+
+  calendarTrigger: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  calendarTriggerText: {
+    color: '#2F6CCB',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  selectedDateText: {
+    color: '#7C899E',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  calendarOverlay: {
+    flex: 1,
+    backgroundColor: '#00000033',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  calendarCard: {
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    gap: 10,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  calendarArrowButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F1F5FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarTitle: {
+    color: '#24344B',
+    fontSize: 15,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  calendarWeekDayLabel: {
+    width: '14.28%',
+    textAlign: 'center',
+    color: '#97A4B7',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDay: {
+    width: '14.28%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  calendarDayMuted: {
+    opacity: 0.6,
+  },
+  calendarDaySelected: {
+    backgroundColor: '#2F6CCB',
+  },
+  calendarDayText: {
+    color: '#2D3D56',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  calendarDayTextMuted: {
+    color: '#A8B4C6',
+  },
+  calendarDayTextDisabled: {
+    color: '#C5CEDA',
+  },
+  calendarDayTextSelected: {
+    color: '#FFFFFF',
+  },
+  calendarCloseButton: {
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  calendarCloseText: {
+    color: '#60728F',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

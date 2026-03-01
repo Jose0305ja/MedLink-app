@@ -5,13 +5,12 @@ import Constants from 'expo-constants';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
-  Button,
   Modal,
   Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
@@ -82,6 +81,26 @@ function sanitizeStatus(rawStatus: string): AppointmentStatus {
   return 'programada';
 }
 
+function getDateChipOptions(baseDate: string) {
+  const parsedDate = new Date(`${baseDate}T00:00:00`);
+  const anchor = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+  const dayFormat = new Intl.DateTimeFormat('es-ES', { weekday: 'short' });
+
+  return Array.from({ length: 7 }).map((_, index) => {
+    const offset = index - 3;
+    const currentDate = new Date(anchor);
+    currentDate.setDate(anchor.getDate() + offset);
+    const isoDate = currentDate.toISOString().split('T')[0];
+    const dayLabel = dayFormat.format(currentDate).replace('.', '');
+
+    return {
+      value: isoDate,
+      dayLabel: dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1),
+      dayNumber: String(currentDate.getDate()),
+    };
+  });
+}
+
 export default function CitasScreen() {
   const { t } = useI18n();
   const [role, setRole] = useState<UserRole | null>(null);
@@ -95,6 +114,7 @@ export default function CitasScreen() {
   const [hasLoadedSchedule, setHasLoadedSchedule] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<AppointmentFilter>('programada');
+  const [showDoctorList, setShowDoctorList] = useState(false);
 
   const loadAppointments = useCallback(
     async (currentRole: UserRole) => {
@@ -273,8 +293,12 @@ export default function CitasScreen() {
     setSelectedSlotId(null);
     setSlots([]);
     setHasLoadedSchedule(false);
+    setShowDoctorList(true);
     await loadDoctors();
   };
+
+  const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null;
+  const dateOptions = getDateChipOptions(selectedDate);
 
   const filteredAppointments = appointments.filter(
     (appointment) => sanitizeStatus(appointment.status) === activeFilter,
@@ -400,60 +424,145 @@ export default function CitasScreen() {
       </ScrollView>
 
       <Modal visible={showModal} animationType="slide" onRequestClose={() => setShowModal(false)}>
-        <View style={{ flex: 1, padding: 16, gap: 10 }}>
-          <Text>{t('scheduleAppointment')}</Text>
-
-          <Text>{t('doctorLabel')}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {doctors.map((doctor) => (
-              <Button
-                key={doctor.id}
-                title={doctor.name}
-                onPress={() => setSelectedDoctorId(doctor.id)}
-                disabled={isLoading || selectedDoctorId === doctor.id}
-              />
-            ))}
+        <SafeAreaView style={styles.modalSafeArea}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setShowModal(false)} style={styles.backButton}>
+              <Ionicons name="chevron-back" size={22} color="#1F2A3D" />
+            </Pressable>
+            <Text style={styles.modalTitle}>Agendar Cita</Text>
+            <View style={styles.headerSpacer} />
           </View>
 
-          <Text>{t('selectDate')}</Text>
-          <TextInput value={selectedDate} onChangeText={setSelectedDate} placeholder="2026-03-05" />
+          <ScrollView contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionLabel}>{t('doctorLabel')}</Text>
 
-          <Button title={t('loadSchedule')} onPress={loadSchedule} disabled={isLoading} />
+              <View style={styles.doctorCard}>
+                <View style={styles.doctorAvatar}>
+                  <Ionicons name="person-outline" size={20} color="#7F8BA1" />
+                </View>
 
-          {hasLoadedSchedule && slots.length === 0 ? <Text>{t('noSlotsForDay')}</Text> : null}
+                <View style={styles.doctorInfo}>
+                  <Text style={styles.doctorCardName}>{selectedDoctor?.name ?? 'Selecciona un doctor'}</Text>
+                  <Text style={styles.doctorCardSpecialty}>Medicina general</Text>
+                </View>
 
-          <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {slots.map((slot) => {
-              const isSelected = selectedSlotId === slot.schedule_id;
-              const bgColor = !slot.available ? '#f5b7b1' : isSelected ? '#7fb3d5' : '#d5f5e3';
-
-              return (
-                <Pressable
-                  key={slot.schedule_id}
-                  onPress={() => {
-                    if (slot.available) {
-                      setSelectedSlotId(slot.schedule_id);
-                    }
-                  }}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: '#333',
-                    paddingVertical: 8,
-                    paddingHorizontal: 10,
-                    borderRadius: 8,
-                    backgroundColor: bgColor,
-                    opacity: slot.available ? 1 : 0.65,
-                  }}>
-                  <Text>{slot.time}</Text>
-                  <Text>{slot.available ? t('available') : t('occupied')}</Text>
+                <Pressable onPress={() => setShowDoctorList((current) => !current)}>
+                  <Text style={styles.changeDoctorText}>Cambiar</Text>
                 </Pressable>
-              );
-            })}
+              </View>
+
+              {showDoctorList ? (
+                <View style={styles.doctorPillsWrap}>
+                  {doctors.map((doctor) => {
+                    const isSelected = doctor.id === selectedDoctorId;
+
+                    return (
+                      <Pressable
+                        key={doctor.id}
+                        onPress={() => {
+                          setSelectedDoctorId(doctor.id);
+                          setShowDoctorList(false);
+                        }}
+                        disabled={isLoading}
+                        style={[styles.doctorPill, isSelected ? styles.doctorPillSelected : null]}>
+                        <Text style={[styles.doctorPillText, isSelected ? styles.doctorPillTextSelected : null]}>
+                          {doctor.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionLabel}>{t('selectDate')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateChipsRow}>
+                {dateOptions.map((dateOption) => {
+                  const isSelected = selectedDate === dateOption.value;
+
+                  return (
+                    <Pressable
+                      key={dateOption.value}
+                      onPress={() => setSelectedDate(dateOption.value)}
+                      style={[styles.dateChip, isSelected ? styles.dateChipSelected : null]}>
+                      <Text style={[styles.dateChipDay, isSelected ? styles.dateChipDaySelected : null]}>
+                        {dateOption.dayLabel}
+                      </Text>
+                      <Text style={[styles.dateChipNumber, isSelected ? styles.dateChipNumberSelected : null]}>
+                        {dateOption.dayNumber}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              <Pressable onPress={loadSchedule} disabled={isLoading} style={styles.loadScheduleLinkWrap}>
+                <Text style={[styles.loadScheduleLink, isLoading ? styles.linkDisabled : null]}>{t('loadSchedule')}</Text>
+              </Pressable>
+            </View>
+
+            {hasLoadedSchedule && slots.length === 0 ? <Text style={styles.noSlotsText}>{t('noSlotsForDay')}</Text> : null}
+
+            {slots.length > 0 ? (
+              <View style={styles.slotsGrid}>
+                {slots.map((slot) => {
+                  const isSelected = selectedSlotId === slot.schedule_id;
+                  const isDisabled = !slot.available;
+
+                  return (
+                    <Pressable
+                      key={slot.schedule_id}
+                      onPress={() => {
+                        if (slot.available) {
+                          setSelectedSlotId(slot.schedule_id);
+                        }
+                      }}
+                      style={[
+                        styles.slotChip,
+                        isSelected ? styles.slotChipSelected : null,
+                        isDisabled ? styles.slotChipDisabled : null,
+                      ]}>
+                      <Text
+                        style={[
+                          styles.slotTimeText,
+                          isSelected ? styles.slotTimeTextSelected : null,
+                          isDisabled ? styles.slotTimeTextDisabled : null,
+                        ]}>
+                        {slot.time}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.slotStateText,
+                          isSelected ? styles.slotTimeTextSelected : null,
+                          isDisabled ? styles.slotTimeTextDisabled : null,
+                        ]}>
+                        {slot.available ? t('available') : t('occupied')}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
           </ScrollView>
 
-          <Button title={t('confirmAppointment')} onPress={createAppointment} disabled={isLoading} />
-          <Button title={t('close')} onPress={() => setShowModal(false)} />
-        </View>
+          <View style={styles.modalFooter}>
+            <Pressable
+              onPress={createAppointment}
+              disabled={isLoading || !selectedDate || !selectedSlotId}
+              style={[
+                styles.confirmButton,
+                isLoading || !selectedDate || !selectedSlotId ? styles.confirmButtonDisabled : null,
+              ]}>
+              <Text style={styles.confirmButtonText}>{t('confirmAppointment')}</Text>
+            </Pressable>
+
+            <Pressable onPress={() => setShowModal(false)} style={styles.closeTextWrap}>
+              <Text style={styles.closeText}>{t('close')}</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -631,5 +740,239 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontWeight: '600',
     fontSize: 14,
+  },
+  modalSafeArea: {
+    flex: 1,
+    backgroundColor: '#F7F9FC',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+  },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  modalTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#172437',
+  },
+  headerSpacer: {
+    width: 34,
+  },
+  modalScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 24,
+    gap: 22,
+  },
+  sectionBlock: {
+    gap: 12,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    color: '#5E6D84',
+    fontWeight: '600',
+  },
+  doctorCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#0D1A2A',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  doctorAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EDF2FA',
+  },
+  doctorInfo: {
+    flex: 1,
+  },
+  doctorCardName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1D2739',
+  },
+  doctorCardSpecialty: {
+    fontSize: 12,
+    color: '#8A95A9',
+    marginTop: 2,
+  },
+  changeDoctorText: {
+    color: '#2F6CCB',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  doctorPillsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  doctorPill: {
+    borderWidth: 1,
+    borderColor: '#D5DDE8',
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  doctorPillSelected: {
+    borderColor: '#326CC6',
+    backgroundColor: '#EAF2FF',
+  },
+  doctorPillText: {
+    color: '#4D5E79',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  doctorPillTextSelected: {
+    color: '#2E67BE',
+    fontWeight: '700',
+  },
+  dateChipsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingRight: 6,
+  },
+  dateChip: {
+    minWidth: 66,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D8DEE9',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  dateChipSelected: {
+    backgroundColor: '#2E6CCD',
+    borderColor: '#2E6CCD',
+  },
+  dateChipDay: {
+    color: '#7A869B',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dateChipDaySelected: {
+    color: '#DCEAFF',
+  },
+  dateChipNumber: {
+    color: '#1B2B42',
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  dateChipNumberSelected: {
+    color: '#FFFFFF',
+  },
+  loadScheduleLinkWrap: {
+    alignSelf: 'flex-start',
+  },
+  loadScheduleLink: {
+    color: '#2F6CCB',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  linkDisabled: {
+    opacity: 0.5,
+  },
+  noSlotsText: {
+    color: '#7A869B',
+    fontSize: 13,
+    marginTop: -2,
+  },
+  slotsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 10,
+  },
+  slotChip: {
+    width: '31.5%',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#D8DEE9',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 9,
+    alignItems: 'center',
+    gap: 2,
+  },
+  slotChipSelected: {
+    borderColor: '#2E6CCD',
+    backgroundColor: '#2E6CCD',
+  },
+  slotChipDisabled: {
+    borderColor: '#E5EAF1',
+    backgroundColor: '#EDF1F6',
+  },
+  slotTimeText: {
+    color: '#213147',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  slotStateText: {
+    color: '#7A869B',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  slotTimeTextSelected: {
+    color: '#FFFFFF',
+  },
+  slotTimeTextDisabled: {
+    color: '#97A3B9',
+  },
+  modalFooter: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
+    backgroundColor: '#F7F9FC',
+  },
+  confirmButton: {
+    borderRadius: 20,
+    backgroundColor: '#2E6CCD',
+    paddingVertical: 15,
+    alignItems: 'center',
+    shadowColor: '#0D1A2A',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.45,
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  closeTextWrap: {
+    alignSelf: 'center',
+    paddingVertical: 10,
+  },
+  closeText: {
+    color: '#7887A0',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

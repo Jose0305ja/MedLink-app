@@ -12,6 +12,12 @@ export async function saveAuth(payload: AuthPayload) {
   authFile.write(JSON.stringify(payload));
 }
 
+export async function clearAuth() {
+  if (authFile.exists) {
+    authFile.delete();
+  }
+}
+
 export async function getAuth() {
   try {
     if (!authFile.exists) {

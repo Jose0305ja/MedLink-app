@@ -268,87 +268,100 @@ export default function CitasScreen() {
     }
   };
 
-  const loadSchedule = async () => {
-    if (!API_URL) {
-      Alert.alert(t('error'), t('missingApiUrl'));
-      return;
-    }
-
-    if (!selectedDoctorId) {
-      Alert.alert(t('error'), t('doctorRequired'));
-      return;
-    }
-
-    if (!selectedDate) {
-      Alert.alert(t('error'), t('dateRequired'));
-      return;
-    }
-
-    try {
-      const token = await getAuthToken();
-      setIsLoading(true);
-      const response = await fetch(
-        `${API_URL}/doctors/${selectedDoctorId}/schedule?date=${encodeURIComponent(selectedDate)}`,
-        {
-          headers: {
-            Authorization: token ? `Bearer ${token}` : '',
-          },
-        },
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        Alert.alert(t('error'), data?.message ?? t('networkError'));
+  const loadScheduleForSelection = useCallback(
+    async (doctorId: string, dateValue: string, showValidationAlerts = true) => {
+      if (!API_URL) {
+        if (showValidationAlerts) {
+          Alert.alert(t('error'), t('missingApiUrl'));
+        }
         return;
       }
 
-      const backendSlots = Array.isArray(data?.slots) ? data.slots : [];
-      const backendAllSlots = Array.isArray(data?.allSlots) ? data.allSlots : [];
-      const bookedTimes = Array.isArray(data?.bookedTimes)
-        ? data.bookedTimes.filter((time: unknown): time is string => typeof time === 'string')
-        : [];
+      if (!doctorId) {
+        if (showValidationAlerts) {
+          Alert.alert(t('error'), t('doctorRequired'));
+        }
+        return;
+      }
 
-      const normalizedSlots: Slot[] = backendSlots.length
-        ? backendSlots
-        : backendAllSlots
-            .filter((slot: unknown): slot is Slot =>
-              Boolean(slot && typeof slot === 'object' && 'schedule_id' in slot && 'time' in slot),
-            )
-            .map((slot) => ({
-              ...slot,
-              available: !bookedTimes.includes(slot.time),
-            }));
+      if (!dateValue) {
+        if (showValidationAlerts) {
+          Alert.alert(t('error'), t('dateRequired'));
+        }
+        return;
+      }
 
-      const selectedDateObject = new Date(`${selectedDate}T00:00:00`);
-      const isTodaySelection = !Number.isNaN(selectedDateObject.getTime()) && isSameDay(selectedDateObject, new Date());
-      const nowWithBuffer = new Date(Date.now() + 10 * 60 * 1000);
+      try {
+        const token = await getAuthToken();
+        setIsLoading(true);
+        const response = await fetch(
+          `${API_URL}/doctors/${doctorId}/schedule?date=${encodeURIComponent(dateValue)}`,
+          {
+            headers: {
+              Authorization: token ? `Bearer ${token}` : '',
+            },
+          },
+        );
 
-      const visibleSlots = normalizedSlots.filter((slot) => {
-        if (!slot.available || bookedTimes.includes(slot.time)) {
-          return false;
+        const data = await response.json();
+
+        if (!response.ok) {
+          Alert.alert(t('error'), data?.message ?? t('networkError'));
+          return;
         }
 
-        if (!isTodaySelection) {
-          return true;
-        }
+        const backendSlots = Array.isArray(data?.slots) ? data.slots : [];
+        const backendAllSlots = Array.isArray(data?.allSlots) ? data.allSlots : [];
+        const bookedTimes = Array.isArray(data?.bookedTimes)
+          ? data.bookedTimes.filter((time: unknown): time is string => typeof time === 'string')
+          : [];
 
-        const slotDateTime = buildDateFromTime(selectedDate, slot.time);
-        if (!slotDateTime) {
-          return false;
-        }
+        const normalizedSlots: Slot[] = backendSlots.length
+          ? backendSlots
+          : backendAllSlots
+              .filter((slot: unknown): slot is Slot =>
+                Boolean(slot && typeof slot === 'object' && 'schedule_id' in slot && 'time' in slot),
+              )
+              .map((slot) => ({
+                ...slot,
+                available: !bookedTimes.includes(slot.time),
+              }));
 
-        return slotDateTime.getTime() > nowWithBuffer.getTime();
-      });
+        const selectedDateObject = new Date(`${dateValue}T00:00:00`);
+        const isTodaySelection = !Number.isNaN(selectedDateObject.getTime()) && isSameDay(selectedDateObject, new Date());
+        const nowWithBuffer = new Date(Date.now() + 10 * 60 * 1000);
 
-      setSlots(visibleSlots);
-      setSelectedSlotId(null);
-      setHasLoadedSchedule(true);
-    } catch {
-      Alert.alert(t('error'), t('networkError'));
-    } finally {
-      setIsLoading(false);
-    }
+        const visibleSlots = normalizedSlots.filter((slot) => {
+          if (!slot.available || bookedTimes.includes(slot.time)) {
+            return false;
+          }
+
+          if (!isTodaySelection) {
+            return true;
+          }
+
+          const slotDateTime = buildDateFromTime(dateValue, slot.time);
+          if (!slotDateTime) {
+            return false;
+          }
+
+          return slotDateTime.getTime() > nowWithBuffer.getTime();
+        });
+
+        setSlots(visibleSlots);
+        setSelectedSlotId(null);
+        setHasLoadedSchedule(true);
+      } catch {
+        Alert.alert(t('error'), t('networkError'));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [t],
+  );
+
+  const loadSchedule = async () => {
+    await loadScheduleForSelection(selectedDoctorId ?? '', selectedDate, true);
   };
 
   const createAppointment = async () => {
@@ -434,6 +447,14 @@ export default function CitasScreen() {
       setSelectedSlotId(null);
     }
   }, [selectedSlotId, slots]);
+
+  useEffect(() => {
+    if (!showModal || !selectedDoctorId || !selectedDate) {
+      return;
+    }
+
+    loadScheduleForSelection(selectedDoctorId, selectedDate, false);
+  }, [showModal, selectedDoctorId, selectedDate, loadScheduleForSelection]);
 
   const filteredAppointments = appointments.filter(
     (appointment) => sanitizeStatus(appointment.status) === activeFilter,

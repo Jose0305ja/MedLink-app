@@ -1,7 +1,7 @@
 import { getAuthToken, getCurrentUserRole } from '@/lib/auth-storage';
 import { useI18n } from '@/lib/i18n-context';
 import Constants from 'expo-constants';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Button,
@@ -15,6 +15,8 @@ import {
 
 const API_URL = Constants.expoConfig?.extra?.expoPublicApiUrl ?? process.env.EXPO_PUBLIC_API_URL;
 
+type UserRole = 'patient' | 'doctor';
+
 type Doctor = {
   id: string;
   name: string;
@@ -26,9 +28,19 @@ type Slot = {
   available: boolean;
 };
 
+type AppointmentItem = {
+  id: string;
+  doctor?: string;
+  patient?: string;
+  date: string;
+  time: string;
+  status: string;
+};
+
 export default function CitasScreen() {
   const { t } = useI18n();
-  const [role, setRole] = useState<string | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
@@ -37,14 +49,48 @@ export default function CitasScreen() {
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const loadAppointments = useCallback(async (currentRole: UserRole) => {
+    if (!API_URL) {
+      Alert.alert(t('error'), t('missingApiUrl'));
+      return;
+    }
+
+    try {
+      const token = await getAuthToken();
+      setIsLoading(true);
+      const endpoint = currentRole === 'patient' ? '/appointments/me' : '/appointments/doctor';
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        Alert.alert(t('error'), data?.message ?? t('networkError'));
+        return;
+      }
+
+      setAppointments(Array.isArray(data) ? data : []);
+    } catch {
+      Alert.alert(t('error'), t('networkError'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [t]);
+
   useEffect(() => {
-    const loadRole = async () => {
+    const loadRoleAndAppointments = async () => {
       const userRole = await getCurrentUserRole();
-      setRole(userRole);
+      if (userRole === 'patient' || userRole === 'doctor') {
+        setRole(userRole);
+        await loadAppointments(userRole);
+      }
     };
 
-    loadRole();
-  }, []);
+    loadRoleAndAppointments();
+  }, [loadAppointments]);
 
   const loadDoctors = async () => {
     if (!API_URL) {
@@ -160,6 +206,9 @@ export default function CitasScreen() {
 
       Alert.alert(t('appointments'), t('appointmentCreated'));
       setShowModal(false);
+      if (role) {
+        await loadAppointments(role);
+      }
     } catch {
       Alert.alert(t('error'), t('networkError'));
     } finally {
@@ -177,17 +226,45 @@ export default function CitasScreen() {
 
   return (
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
-      <Text>{t('appointments')}</Text>
+      <Text style={{ fontSize: 20, fontWeight: '600' }}>{t('appointments')}</Text>
 
-      {role === 'patient' ? (
-        <Button title={t('scheduleAppointment')} onPress={openScheduler} />
-      ) : null}
+      {role === 'patient' ? <Button title={t('scheduleAppointment')} onPress={openScheduler} /> : null}
+
+      <ScrollView contentContainerStyle={{ gap: 10, paddingBottom: 24 }}>
+        {appointments.length === 0 ? (
+          <View style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 10, padding: 14 }}>
+            <Text>{t('noAppointments')}</Text>
+          </View>
+        ) : (
+          appointments.map((appointment) => (
+            <View
+              key={appointment.id}
+              style={{
+                borderWidth: 1,
+                borderColor: '#d5d8dc',
+                borderRadius: 12,
+                padding: 12,
+                backgroundColor: '#f8f9f9',
+                gap: 4,
+              }}>
+              <Text style={{ fontWeight: '700' }}>
+                {role === 'doctor'
+                  ? `${t('patientLabel')}: ${appointment.patient ?? '-'}`
+                  : `${t('doctorLabel')}: ${appointment.doctor ?? '-'}`}
+              </Text>
+              <Text>{`${t('dateLabel')}: ${new Date(appointment.date).toLocaleDateString()}`}</Text>
+              <Text>{`${t('timeLabel')}: ${appointment.time}`}</Text>
+              <Text>{`${t('statusLabel')}: ${appointment.status}`}</Text>
+            </View>
+          ))
+        )}
+      </ScrollView>
 
       <Modal visible={showModal} animationType="slide" onRequestClose={() => setShowModal(false)}>
         <View style={{ flex: 1, padding: 16, gap: 10 }}>
           <Text>{t('scheduleAppointment')}</Text>
 
-          <Text>Doctor</Text>
+          <Text>{t('doctorLabel')}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {doctors.map((doctor) => (
               <Button

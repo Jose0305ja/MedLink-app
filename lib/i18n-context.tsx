@@ -39,7 +39,13 @@ type TranslationKey =
   | 'appointmentCreated'
   | 'close'
   | 'available'
-  | 'occupied';
+  | 'occupied'
+  | 'noAppointments'
+  | 'doctorLabel'
+  | 'patientLabel'
+  | 'dateLabel'
+  | 'timeLabel'
+  | 'statusLabel';
 
 const translations: Record<Language, Record<TranslationKey, string>> = {
   es: {
@@ -80,6 +86,12 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     close: 'Cerrar',
     available: 'Disponible',
     occupied: 'Ocupado',
+    noAppointments: 'Sin citas',
+    doctorLabel: 'Doctor',
+    patientLabel: 'Paciente',
+    dateLabel: 'Fecha',
+    timeLabel: 'Hora',
+    statusLabel: 'Estado',
   },
   en: {
     language: 'Language',
@@ -119,6 +131,12 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     close: 'Close',
     available: 'Available',
     occupied: 'Occupied',
+    noAppointments: 'No appointments',
+    doctorLabel: 'Doctor',
+    patientLabel: 'Patient',
+    dateLabel: 'Date',
+    timeLabel: 'Time',
+    statusLabel: 'Status',
   },
 };
 

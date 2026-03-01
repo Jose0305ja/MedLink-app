@@ -8,17 +8,27 @@ type TranslationKey =
   | 'english'
   | 'email'
   | 'password'
+  | 'name'
+  | 'role'
+  | 'patient'
+  | 'doctor'
   | 'login'
+  | 'register'
+  | 'registering'
   | 'loggingIn'
   | 'fillEmailPassword'
+  | 'fillRegisterFields'
   | 'missingApiUrl'
   | 'loginFailed'
+  | 'registerFailed'
   | 'networkError'
   | 'error'
   | 'home'
   | 'appointments'
   | 'profile'
-  | 'logout';
+  | 'logout'
+  | 'goToRegister'
+  | 'goToLogin';
 
 const translations: Record<Language, Record<TranslationKey, string>> = {
   es: {
@@ -27,17 +37,27 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     english: 'Inglés',
     email: 'Correo',
     password: 'Contraseña',
+    name: 'Nombre',
+    role: 'Rol',
+    patient: 'patient',
+    doctor: 'doctor',
     login: 'Iniciar sesión',
+    register: 'Registrarse',
+    registering: 'Registrando...',
     loggingIn: 'Ingresando...',
     fillEmailPassword: 'Completa correo y contraseña.',
+    fillRegisterFields: 'Completa nombre, correo, contraseña y rol.',
     missingApiUrl: 'No existe EXPO_PUBLIC_API_URL.',
     loginFailed: 'No se pudo iniciar sesión.',
+    registerFailed: 'No se pudo registrar.',
     networkError: 'No se pudo conectar con el servidor.',
     error: 'Error',
     home: 'Inicio',
     appointments: 'Mis citas',
     profile: 'Mi perfil',
     logout: 'Logout',
+    goToRegister: '¿No tienes cuenta? Regístrate',
+    goToLogin: '¿Ya tienes cuenta? Inicia sesión',
   },
   en: {
     language: 'Language',
@@ -45,17 +65,27 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     english: 'English',
     email: 'Email',
     password: 'Password',
+    name: 'Name',
+    role: 'Role',
+    patient: 'patient',
+    doctor: 'doctor',
     login: 'Sign in',
+    register: 'Register',
+    registering: 'Registering...',
     loggingIn: 'Signing in...',
     fillEmailPassword: 'Please fill in email and password.',
+    fillRegisterFields: 'Please fill in name, email, password and role.',
     missingApiUrl: 'EXPO_PUBLIC_API_URL is missing.',
     loginFailed: 'Could not sign in.',
+    registerFailed: 'Could not register.',
     networkError: 'Could not connect to server.',
     error: 'Error',
     home: 'Home',
     appointments: 'Appointments',
     profile: 'Profile',
     logout: 'Logout',
+    goToRegister: "Don't have an account? Register",
+    goToLogin: 'Already have an account? Sign in',
   },
 };
 

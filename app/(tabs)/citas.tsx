@@ -555,15 +555,7 @@ export default function CitasScreen() {
       );
     }
 
-    return (
-      <View style={styles.actionsRow}>
-        <Pressable
-          onPress={onPlaceholderPress}
-          style={[styles.actionButton, styles.primaryActionButton, styles.singleActionButton]}>
-          <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>{t('scheduleNewAppointment')}</Text>
-        </Pressable>
-      </View>
-    );
+    return null;
   };
 
   return (

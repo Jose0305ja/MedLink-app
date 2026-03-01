@@ -1,3 +1,4 @@
+import { I18nProvider } from '@/lib/i18n-context';
 import { AppThemeProvider, useAppTheme } from '@/lib/theme-context';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
@@ -20,8 +21,10 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <AppThemeProvider>
-      <RootNavigator />
-    </AppThemeProvider>
+    <I18nProvider>
+      <AppThemeProvider>
+        <RootNavigator />
+      </AppThemeProvider>
+    </I18nProvider>
   );
 }

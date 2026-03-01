@@ -219,6 +219,11 @@ export default function LoginScreen() {
                   onPress={() => setRole('patient')}
                   style={[styles.segmentItem, role === 'patient' && styles.segmentItemActive]}
                 >
+                  <Ionicons
+                    name="person-outline"
+                    size={18}
+                    color={role === 'patient' ? '#2F6BFF' : 'rgba(0,0,0,0.35)'}
+                  />
                   <Text style={[styles.segmentText, role === 'patient' && styles.segmentTextActive]}>
                     {language === 'es' ? 'Paciente' : 'Patient'}
                   </Text>
@@ -227,6 +232,11 @@ export default function LoginScreen() {
                   onPress={() => setRole('doctor')}
                   style={[styles.segmentItem, role === 'doctor' && styles.segmentItemActive]}
                 >
+                  <Ionicons
+                    name="medkit-outline"
+                    size={18}
+                    color={role === 'doctor' ? '#2F6BFF' : 'rgba(0,0,0,0.35)'}
+                  />
                   <Text style={[styles.segmentText, role === 'doctor' && styles.segmentTextActive]}>
                     {language === 'es' ? 'Doctor' : 'Doctor'}
                   </Text>
@@ -398,29 +408,38 @@ const styles = StyleSheet.create({
   segmentedContainer: {
     width: '100%',
     marginTop: 14,
+    marginHorizontal: 2,
     padding: 4,
-    borderRadius: 16,
-    backgroundColor: '#F1F5FD',
+    borderRadius: 999,
+    backgroundColor: 'rgba(47,107,255,0.10)',
     flexDirection: 'row',
     gap: 6,
   },
   segmentItem: {
     flex: 1,
-    borderRadius: 12,
+    height: 44,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    flexDirection: 'row',
+    gap: 8,
   },
   segmentItemActive: {
-    backgroundColor: '#2F6BFF',
+    backgroundColor: 'rgba(47,107,255,0.18)',
+    shadowColor: '#2F6BFF',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
   },
   segmentText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#6B7A93',
+    color: 'rgba(0,0,0,0.45)',
   },
   segmentTextActive: {
-    color: '#FFFFFF',
+    color: '#2F6BFF',
+    fontWeight: '700',
   },
   submitButton: {
     width: '100%',

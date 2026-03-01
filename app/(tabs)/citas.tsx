@@ -1,9 +1,9 @@
 import { Text, View } from 'react-native';
 
-export default function HomeScreen() {
+export default function CitasScreen() {
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Home</Text>
+      <Text>Mis citas</Text>
     </View>
   );
 }

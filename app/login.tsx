@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   languageRowWrapper: {
     width: '100%',
     alignItems: 'flex-end',
-    marginTop: 36,
+    marginTop: 14,
     marginBottom: 10,
   },
   languageRow: {

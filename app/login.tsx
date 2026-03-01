@@ -151,7 +151,7 @@ export default function LoginScreen() {
             </View>
 
             <Text style={styles.title}>MediSync</Text>
-            <Text style={styles.subtitle}>Tu puente seguro entre pacientes y doctores.</Text>
+            <Text style={styles.subtitle}>{language === 'es' ? 'Tu puente seguro entre pacientes y doctores.' : 'Your secure bridge between patients and doctors.'}</Text>
 
             {isRegisterMode ? (
               <View style={styles.inputCard}>
@@ -173,7 +173,7 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 value={email}
                 onChangeText={setEmail}
-                placeholder="Correo Electrónico"
+                placeholder={t('email')}
                 placeholderTextColor="#A7B1C2"
                 style={styles.input}
               />
@@ -186,13 +186,13 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
-                placeholder="Contraseña"
+                placeholder={t('password')}
                 placeholderTextColor="#A7B1C2"
                 style={styles.input}
               />
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                accessibilityLabel={showPassword ? (language === 'es' ? 'Ocultar contraseña' : 'Hide password') : language === 'es' ? 'Mostrar contraseña' : 'Show password'}
                 onPress={() => setShowPassword((current) => !current)}
                 style={styles.eyeButton}
               >
@@ -209,12 +209,11 @@ export default function LoginScreen() {
               {isLoading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.submitText}>{isRegisterMode ? t('register') : 'Ingresar'}</Text>
+                <Text style={styles.submitText}>{isRegisterMode ? t('register') : t('login')}</Text>
               )}
             </TouchableOpacity>
 
             <View style={styles.footerRow}>
-              <Text style={styles.footerText}>¿No tienes cuenta? </Text>
               <TouchableOpacity
                 onPress={() => {
                   setMode((current) => (current === 'login' ? 'register' : 'login'));
@@ -222,7 +221,13 @@ export default function LoginScreen() {
                 }}
                 disabled={isLoading}
               >
-                <Text style={styles.footerLink}>Regístrate aquí</Text>
+                <Text style={styles.footerText}>
+                  {isRegisterMode
+                    ? t('goToLogin')
+                    : language === 'es'
+                      ? '¿No tienes cuenta? Regístrate aquí'
+                      : "Don't have an account? Register here"}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -257,6 +262,7 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     gap: 8,
+    zIndex: 20,
   },
   langChip: {
     borderWidth: 1,
@@ -367,12 +373,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   footerText: {
-    color: '#7F8AA0',
-    fontSize: 14,
-  },
-  footerLink: {
     color: '#2F6BFF',
     fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
   },
 });

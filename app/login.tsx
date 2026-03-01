@@ -128,21 +128,21 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.languageRow}>
+          <View style={styles.languageRowWrapper}>
+            <View style={styles.languageRow}>
             <Pressable
               style={[styles.langChip, language === 'es' && styles.langChipActive]}
               onPress={() => setLanguage('es')}
-              disabled={language === 'es'}
             >
               <Text style={[styles.langText, language === 'es' && styles.langTextActive]}>ES</Text>
             </Pressable>
             <Pressable
               style={[styles.langChip, language === 'en' && styles.langChipActive]}
               onPress={() => setLanguage('en')}
-              disabled={language === 'en'}
             >
               <Text style={[styles.langText, language === 'en' && styles.langTextActive]}>EN</Text>
             </Pressable>
+            </View>
           </View>
 
           <View style={styles.container}>
@@ -256,13 +256,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 24,
   },
+  languageRowWrapper: {
+    width: '100%',
+    alignItems: 'flex-end',
+    marginTop: 36,
+    marginBottom: 10,
+  },
   languageRow: {
-    position: 'absolute',
-    top: 36,
-    right: 0,
     flexDirection: 'row',
     gap: 8,
-    zIndex: 20,
   },
   langChip: {
     borderWidth: 1,

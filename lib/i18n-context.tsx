@@ -46,7 +46,19 @@ type TranslationKey =
   | 'dateLabel'
   | 'timeLabel'
   | 'statusLabel'
-  | 'noSlotsForDay';
+  | 'noSlotsForDay'
+  | 'lightMode'
+  | 'darkMode'
+  | 'signOut'
+  | 'upcoming'
+  | 'completed'
+  | 'missed'
+  | 'scheduleNewAppointment'
+  | 'reschedule'
+  | 'cancel'
+  | 'viewDetails'
+  | 'medicalConsultation'
+  | 'scheduleAppointmentTitle';
 
 const translations: Record<Language, Record<TranslationKey, string>> = {
   es: {
@@ -73,7 +85,7 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     home: 'Inicio',
     appointments: 'Mis citas',
     profile: 'Mi perfil',
-    logout: 'Logout',
+    logout: 'Salir',
     goToRegister: '¿No tienes cuenta? Regístrate',
     goToLogin: '¿Ya tienes cuenta? Inicia sesión',
     scheduleAppointment: 'Agendar cita',
@@ -94,6 +106,18 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     timeLabel: 'Hora',
     statusLabel: 'Estado',
     noSlotsForDay: 'Sin horarios disponibles para este día',
+    lightMode: 'Modo claro',
+    darkMode: 'Modo oscuro',
+    signOut: 'Salir',
+    upcoming: 'Próximas',
+    completed: 'Completadas',
+    missed: 'No asistió',
+    scheduleNewAppointment: 'Agendar nueva cita',
+    reschedule: 'Reprogramar',
+    cancel: 'Cancelar',
+    viewDetails: 'Ver detalles',
+    medicalConsultation: 'Consulta médica',
+    scheduleAppointmentTitle: 'Agendar cita',
   },
   en: {
     language: 'Language',
@@ -140,6 +164,18 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     timeLabel: 'Time',
     statusLabel: 'Status',
     noSlotsForDay: 'No schedules available for this day',
+    lightMode: 'Light mode',
+    darkMode: 'Dark mode',
+    signOut: 'Sign out',
+    upcoming: 'Upcoming',
+    completed: 'Completed',
+    missed: 'Missed',
+    scheduleNewAppointment: 'Schedule new appointment',
+    reschedule: 'Reschedule',
+    cancel: 'Cancel',
+    viewDetails: 'View details',
+    medicalConsultation: 'Medical consultation',
+    scheduleAppointmentTitle: 'Schedule appointment',
   },
 };
 

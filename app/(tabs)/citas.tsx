@@ -49,17 +49,7 @@ type AppointmentItem = {
   status: string;
 };
 
-const statusLabelMap: Record<AppointmentStatus, string> = {
-  programada: 'Programada',
-  completada: 'Completada',
-  no_asistio: 'No asistió',
-};
-
-const filterTabs: { label: string; value: AppointmentFilter }[] = [
-  { label: 'Próximas', value: 'programada' },
-  { label: 'Completadas', value: 'completada' },
-  { label: 'No asistió', value: 'no_asistio' },
-];
+const filterTabs: AppointmentFilter[] = ['programada', 'completada', 'no_asistio'];
 
 function getStatusBadgeStyle(status: AppointmentStatus) {
   if (status === 'completada') {
@@ -191,6 +181,15 @@ export default function CitasScreen() {
   const [showDoctorList, setShowDoctorList] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(startOfDay(new Date()));
+
+  const statusLabelMap: Record<AppointmentStatus, string> = useMemo(
+    () => ({
+      programada: t('upcoming'),
+      completada: t('completed'),
+      no_asistio: t('missed'),
+    }),
+    [t],
+  );
 
   const loadAppointments = useCallback(
     async (currentRole: UserRole) => {
@@ -464,10 +463,10 @@ export default function CitasScreen() {
       return (
         <View style={styles.actionsRow}>
           <Pressable onPress={onPlaceholderPress} style={[styles.actionButton, styles.primaryActionButton]}>
-            <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>Reprogramar</Text>
+            <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>{t('reschedule')}</Text>
           </Pressable>
           <Pressable onPress={onPlaceholderPress} style={[styles.actionButton, styles.secondaryActionButton]}>
-            <Text style={[styles.actionButtonText, styles.secondaryActionButtonText]}>Cancelar</Text>
+            <Text style={[styles.actionButtonText, styles.secondaryActionButtonText]}>{t('cancel')}</Text>
           </Pressable>
         </View>
       );
@@ -479,7 +478,7 @@ export default function CitasScreen() {
           <Pressable
             onPress={onPlaceholderPress}
             style={[styles.actionButton, styles.secondaryActionButton, styles.singleActionButton]}>
-            <Text style={[styles.actionButtonText, styles.secondaryActionButtonText]}>Ver detalles</Text>
+            <Text style={[styles.actionButtonText, styles.secondaryActionButtonText]}>{t('viewDetails')}</Text>
           </Pressable>
         </View>
       );
@@ -490,7 +489,7 @@ export default function CitasScreen() {
         <Pressable
           onPress={onPlaceholderPress}
           style={[styles.actionButton, styles.primaryActionButton, styles.singleActionButton]}>
-          <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>Agendar nueva cita</Text>
+          <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>{t('scheduleNewAppointment')}</Text>
         </Pressable>
       </View>
     );
@@ -499,23 +498,23 @@ export default function CitasScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.topSection}>
-        <Text style={styles.title}>Mis citas</Text>
+        <Text style={styles.title}>{t('appointments')}</Text>
         {role === 'patient' ? (
           <Pressable onPress={openScheduler} style={styles.scheduleButton}>
-            <Text style={styles.scheduleButtonText}>Agendar cita</Text>
+            <Text style={styles.scheduleButtonText}>{t('scheduleAppointment')}</Text>
           </Pressable>
         ) : null}
       </View>
 
       <View style={styles.tabsRow}>
         {filterTabs.map((tab) => {
-          const isActive = activeFilter === tab.value;
+          const isActive = activeFilter === tab;
           return (
             <Pressable
-              key={tab.value}
-              onPress={() => setActiveFilter(tab.value)}
+              key={tab}
+              onPress={() => setActiveFilter(tab)}
               style={[styles.tabButton, isActive ? styles.activeTabButton : null]}>
-              <Text style={[styles.tabButtonText, isActive ? styles.activeTabButtonText : null]}>{tab.label}</Text>
+              <Text style={[styles.tabButtonText, isActive ? styles.activeTabButtonText : null]}>{statusLabelMap[tab]}</Text>
             </Pressable>
           );
         })}
@@ -543,7 +542,7 @@ export default function CitasScreen() {
                     <View style={styles.profileTextBlock}>
                       <Text style={styles.doctorName}>{mainName ?? '-'}</Text>
                       <Text style={styles.specialtyText}>
-                        {role === 'doctor' ? 'Paciente' : 'Consulta médica'}
+                        {role === 'doctor' ? t('patientLabel') : t('medicalConsultation')}
                       </Text>
                     </View>
                   </View>
@@ -583,7 +582,7 @@ export default function CitasScreen() {
               <Pressable onPress={() => setShowModal(false)} style={styles.backButton}>
                 <Ionicons name="chevron-back" size={18} color="#2B3A51" />
               </Pressable>
-              <Text style={styles.modalTitle}>Agendar Cita</Text>
+              <Text style={styles.modalTitle}>{t('scheduleAppointmentTitle')}</Text>
               <View style={styles.headerSpacer} />
             </View>
 
@@ -631,7 +630,7 @@ export default function CitasScreen() {
               </View>
 
               <View style={styles.sectionBlock}>
-                <Text style={styles.sectionLabel}>Selecciona una fecha</Text>
+                <Text style={styles.sectionLabel}>{t('selectDate').replace(' (YYYY-MM-DD)', '')}</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -660,10 +659,10 @@ export default function CitasScreen() {
 
                 <Pressable onPress={() => setShowCalendar(true)} style={styles.calendarTrigger}>
                   <Ionicons name="calendar-outline" size={14} color="#2F6CCB" />
-                  <Text style={styles.calendarTriggerText}>Elegir fecha exacta</Text>
+                  <Text style={styles.calendarTriggerText}>{t('selectDate')}</Text>
                 </Pressable>
 
-                {selectedDateLabel ? <Text style={styles.selectedDateText}>Fecha seleccionada: {selectedDateLabel}</Text> : null}
+                {selectedDateLabel ? <Text style={styles.selectedDateText}>{`${t('dateLabel')}: ${selectedDateLabel}`}</Text> : null}
 
               </View>
 

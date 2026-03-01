@@ -4,18 +4,37 @@ import { useAppTheme } from '@/lib/theme-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-function ThemeToggle({ isDark, onToggle }: { isDark: boolean; onToggle: (value: boolean) => void }) {
+function ThemeToggle({
+  isDark,
+  onSelectLight,
+  onSelectDark,
+  lightLabel,
+  darkLabel,
+}: {
+  isDark: boolean;
+  onSelectLight: () => void;
+  onSelectDark: () => void;
+  lightLabel: string;
+  darkLabel: string;
+}) {
   return (
-    <View style={styles.toggleContainer}>
-      <Switch
-        value={isDark}
-        onValueChange={onToggle}
-        ios_backgroundColor="#DDE4F1"
-        trackColor={{ false: '#DDE4F1', true: '#BFD4FF' }}
-        thumbColor="#FFFFFF"
-      />
+    <View style={styles.themeControl}>
+      <Pressable
+        onPress={onSelectLight}
+        accessibilityRole="button"
+        accessibilityLabel={lightLabel}
+        style={[styles.themeButton, !isDark && styles.themeButtonActive]}>
+        <Ionicons name="sunny" size={16} color={!isDark ? '#3D77CC' : '#8D99AE'} />
+      </Pressable>
+      <Pressable
+        onPress={onSelectDark}
+        accessibilityRole="button"
+        accessibilityLabel={darkLabel}
+        style={[styles.themeButton, isDark && styles.themeButtonActive]}>
+        <Ionicons name="moon" size={16} color={isDark ? '#3D77CC' : '#8D99AE'} />
+      </Pressable>
     </View>
   );
 }
@@ -23,18 +42,26 @@ function ThemeToggle({ isDark, onToggle }: { isDark: boolean; onToggle: (value: 
 function LanguageSwitcher({
   language,
   onChange,
+  spanishLabel,
+  englishLabel,
 }: {
   language: 'es' | 'en';
   onChange: (language: 'es' | 'en') => void;
+  spanishLabel: string;
+  englishLabel: string;
 }) {
   return (
     <View style={styles.segmentedContainer}>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={spanishLabel}
         onPress={() => onChange('es')}
         style={[styles.segmentButton, language === 'es' && styles.segmentButtonActive]}>
         <Text style={[styles.segmentLabel, language === 'es' && styles.segmentLabelActive]}>ES</Text>
       </Pressable>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={englishLabel}
         onPress={() => onChange('en')}
         style={[styles.segmentButton, language === 'en' && styles.segmentButtonActive]}>
         <Text style={[styles.segmentLabel, language === 'en' && styles.segmentLabelActive]}>EN</Text>
@@ -45,7 +72,8 @@ function LanguageSwitcher({
 
 function LogoutButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} hitSlop={10} style={styles.logoutButton}>
+    <Pressable onPress={onPress} hitSlop={10} style={styles.logoutButton} accessibilityLabel={label}>
+      <Ionicons name="log-out-outline" size={15} color="#3D77CC" />
       <Text style={styles.logoutText}>{label}</Text>
     </Pressable>
   );
@@ -90,14 +118,32 @@ export default function TabLayout() {
         headerRightContainerStyle: styles.headerSide,
         headerTitleContainerStyle: styles.headerCenter,
         headerTitleAlign: 'center',
-        headerLeft: () => <ThemeToggle isDark={isDark} onToggle={toggleTheme} />,
+        headerLeft: () => (
+          <ThemeToggle
+            isDark={isDark}
+            onSelectLight={() => {
+              if (isDark) {
+                toggleTheme();
+              }
+            }}
+            onSelectDark={() => {
+              if (!isDark) {
+                toggleTheme();
+              }
+            }}
+            lightLabel={t('lightMode')}
+            darkLabel={t('darkMode')}
+          />
+        ),
         headerTitle: () => (
           <LanguageSwitcher
             language={language as 'es' | 'en'}
             onChange={(nextLanguage) => setLanguage(nextLanguage)}
+            spanishLabel={t('spanish')}
+            englishLabel={t('english')}
           />
         ),
-        headerRight: () => <LogoutButton label={t('logout')} onPress={handleLogout} />,
+        headerRight: () => <LogoutButton label={t('signOut')} onPress={handleLogout} />,
         sceneStyle: styles.scene,
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabLabel,
@@ -134,20 +180,32 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   header: {
     backgroundColor: '#F7F9FC',
-    height: 102,
+    height: 96,
   },
   headerSide: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 20,
     justifyContent: 'center',
   },
   headerCenter: {
     justifyContent: 'center',
   },
-  toggleContainer: {
-    borderRadius: 16,
-    backgroundColor: '#EEF3FB',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  themeControl: {
+    flexDirection: 'row',
+    backgroundColor: '#EDF2F8',
+    borderRadius: 999,
+    padding: 3,
+    alignItems: 'center',
+    minHeight: 40,
+  },
+  themeButton: {
+    width: 36,
+    height: 34,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  themeButtonActive: {
+    backgroundColor: '#DCE9FF',
   },
   segmentedContainer: {
     flexDirection: 'row',
@@ -155,11 +213,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     padding: 3,
     alignItems: 'center',
+    minHeight: 40,
   },
   segmentButton: {
     minWidth: 44,
+    height: 34,
     borderRadius: 999,
-    paddingVertical: 6,
     paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -178,9 +237,17 @@ const styles = StyleSheet.create({
   logoutButton: {
     paddingVertical: 8,
     paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#D9E4F5',
+    flexDirection: 'row',
+    gap: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
   },
   logoutText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#3D77CC',
   },

@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   },
   languageRow: {
     position: 'absolute',
-    top: 20,
+    top: 36,
     right: 0,
     flexDirection: 'row',
     gap: 8,

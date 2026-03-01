@@ -2,7 +2,7 @@ import { getAuthToken, getCurrentUserRole } from '@/lib/auth-storage';
 import { useI18n } from '@/lib/i18n-context';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -81,22 +81,37 @@ function sanitizeStatus(rawStatus: string): AppointmentStatus {
   return 'programada';
 }
 
+function toIsoDay(dateValue: Date) {
+  return new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate()).toISOString().split('T')[0];
+}
+
 function getDateChipOptions(baseDate: string) {
   const parsedDate = new Date(`${baseDate}T00:00:00`);
-  const anchor = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const tomorrow = new Date(todayStart);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const parsedStart = Number.isNaN(parsedDate.getTime())
+    ? tomorrow
+    : new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
+
+  const anchor = parsedStart > tomorrow ? parsedStart : tomorrow;
   const dayFormat = new Intl.DateTimeFormat('es-ES', { weekday: 'short' });
+  const monthFormat = new Intl.DateTimeFormat('es-ES', { month: 'short' });
 
   return Array.from({ length: 7 }).map((_, index) => {
-    const offset = index - 3;
     const currentDate = new Date(anchor);
-    currentDate.setDate(anchor.getDate() + offset);
-    const isoDate = currentDate.toISOString().split('T')[0];
+    currentDate.setDate(anchor.getDate() + index);
+
     const dayLabel = dayFormat.format(currentDate).replace('.', '');
+    const monthLabel = monthFormat.format(currentDate).replace('.', '');
 
     return {
-      value: isoDate,
+      value: toIsoDay(currentDate),
       dayLabel: dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1),
       dayNumber: String(currentDate.getDate()),
+      monthLabel: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
     };
   });
 }
@@ -227,7 +242,26 @@ export default function CitasScreen() {
         return;
       }
 
-      setSlots(Array.isArray(data?.slots) ? data.slots : []);
+      const backendSlots = Array.isArray(data?.slots) ? data.slots : [];
+      const backendAllSlots = Array.isArray(data?.allSlots) ? data.allSlots : [];
+      const bookedTimes = Array.isArray(data?.bookedTimes)
+        ? data.bookedTimes.filter((time: unknown): time is string => typeof time === 'string')
+        : [];
+
+      const normalizedSlots: Slot[] = backendSlots.length
+        ? backendSlots
+        : backendAllSlots
+            .filter((slot: unknown): slot is Slot =>
+              Boolean(slot && typeof slot === 'object' && 'schedule_id' in slot && 'time' in slot),
+            )
+            .map((slot) => ({
+              ...slot,
+              available: !bookedTimes.includes(slot.time),
+            }));
+
+      const visibleSlots = normalizedSlots.filter((slot) => slot.available && !bookedTimes.includes(slot.time));
+
+      setSlots(visibleSlots);
       setSelectedSlotId(null);
       setHasLoadedSchedule(true);
     } catch {
@@ -298,7 +332,27 @@ export default function CitasScreen() {
   };
 
   const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null;
-  const dateOptions = getDateChipOptions(selectedDate);
+  const dateOptions = useMemo(() => getDateChipOptions(selectedDate), [selectedDate]);
+
+  useEffect(() => {
+    if (!dateOptions.length) {
+      return;
+    }
+
+    const hasValidSelectedDate = dateOptions.some((option) => option.value === selectedDate);
+    if (!hasValidSelectedDate) {
+      setSelectedDate(dateOptions[0].value);
+      setSelectedSlotId(null);
+      setHasLoadedSchedule(false);
+      setSlots([]);
+    }
+  }, [dateOptions, selectedDate]);
+
+  useEffect(() => {
+    if (selectedSlotId && !slots.some((slot) => slot.schedule_id === selectedSlotId)) {
+      setSelectedSlotId(null);
+    }
+  }, [selectedSlotId, slots]);
 
   const filteredAppointments = appointments.filter(
     (appointment) => sanitizeStatus(appointment.status) === activeFilter,
@@ -395,7 +449,7 @@ export default function CitasScreen() {
                     </View>
                   </View>
 
-                  <View style={[styles.badge, { backgroundColor: badgeStyle.backgroundColor }]}>
+                  <View style={[styles.badge, { backgroundColor: badgeStyle.backgroundColor }]}> 
                     <Text style={[styles.badgeText, { color: badgeStyle.color }]}>
                       {statusLabelMap[normalizedStatus]}
                     </Text>
@@ -497,6 +551,9 @@ export default function CitasScreen() {
                         <Text style={[styles.dateChipNumber, isSelected ? styles.dateChipNumberSelected : null]}>
                           {dateOption.dayNumber}
                         </Text>
+                        <Text style={[styles.dateChipMonth, isSelected ? styles.dateChipMonthSelected : null]}>
+                          {dateOption.monthLabel}
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -513,7 +570,6 @@ export default function CitasScreen() {
                 <View style={styles.slotsGrid}>
                   {slots.map((slot) => {
                     const isSelected = selectedSlotId === slot.schedule_id;
-                    const isDisabled = !slot.available;
 
                     return (
                       <Pressable
@@ -523,16 +579,11 @@ export default function CitasScreen() {
                             setSelectedSlotId(slot.schedule_id);
                           }
                         }}
-                        style={[
-                          styles.slotChip,
-                          isSelected ? styles.slotChipSelected : null,
-                          isDisabled ? styles.slotChipDisabled : null,
-                        ]}>
+                        style={[styles.slotChip, isSelected ? styles.slotChipSelected : null]}>
                         <Text
                           style={[
                             styles.slotTimeText,
                             isSelected ? styles.slotTimeTextSelected : null,
-                            isDisabled ? styles.slotTimeTextDisabled : null,
                           ]}>
                           {slot.time}
                         </Text>
@@ -540,9 +591,8 @@ export default function CitasScreen() {
                           style={[
                             styles.slotStateText,
                             isSelected ? styles.slotStateTextSelected : null,
-                            isDisabled ? styles.slotTimeTextDisabled : null,
                           ]}>
-                          {slot.available ? t('available') : t('occupied')}
+                          {t('available')}
                         </Text>
                       </Pressable>
                     );
@@ -874,7 +924,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 0,
   },
   dateChipSelected: {
     backgroundColor: '#4E85DD',
@@ -887,7 +937,7 @@ const styles = StyleSheet.create({
   },
   dateChipDay: {
     color: '#8B98AE',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   dateChipDaySelected: {
@@ -895,12 +945,21 @@ const styles = StyleSheet.create({
   },
   dateChipNumber: {
     color: '#2D3D56',
-    fontSize: 21,
+    fontSize: 19,
     fontWeight: '700',
-    lineHeight: 24,
+    lineHeight: 22,
   },
   dateChipNumberSelected: {
     color: '#FFFFFF',
+  },
+  dateChipMonth: {
+    color: '#9AA7BB',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: -1,
+  },
+  dateChipMonthSelected: {
+    color: '#E6F0FF',
   },
   loadScheduleLinkWrap: {
     alignSelf: 'flex-start',
@@ -940,10 +999,6 @@ const styles = StyleSheet.create({
   slotChipSelected: {
     borderColor: '#2F6CCB',
     backgroundColor: '#2F6CCB',
-  },
-  slotChipDisabled: {
-    borderColor: '#EEF2F7',
-    backgroundColor: '#EEF2F7',
   },
   slotTimeText: {
     color: '#22324A',

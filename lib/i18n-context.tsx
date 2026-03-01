@@ -28,7 +28,18 @@ type TranslationKey =
   | 'profile'
   | 'logout'
   | 'goToRegister'
-  | 'goToLogin';
+  | 'goToLogin'
+  | 'scheduleAppointment'
+  | 'selectDate'
+  | 'loadSchedule'
+  | 'confirmAppointment'
+  | 'doctorRequired'
+  | 'dateRequired'
+  | 'slotRequired'
+  | 'appointmentCreated'
+  | 'close'
+  | 'available'
+  | 'occupied';
 
 const translations: Record<Language, Record<TranslationKey, string>> = {
   es: {
@@ -58,6 +69,17 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     logout: 'Logout',
     goToRegister: '¿No tienes cuenta? Regístrate',
     goToLogin: '¿Ya tienes cuenta? Inicia sesión',
+    scheduleAppointment: 'Agendar cita',
+    selectDate: 'Selecciona fecha (YYYY-MM-DD)',
+    loadSchedule: 'Cargar horarios',
+    confirmAppointment: 'Confirmar cita',
+    doctorRequired: 'Selecciona un doctor.',
+    dateRequired: 'Selecciona una fecha.',
+    slotRequired: 'Selecciona un horario disponible.',
+    appointmentCreated: 'Cita creada exitosamente.',
+    close: 'Cerrar',
+    available: 'Disponible',
+    occupied: 'Ocupado',
   },
   en: {
     language: 'Language',
@@ -86,6 +108,17 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     logout: 'Logout',
     goToRegister: "Don't have an account? Register",
     goToLogin: 'Already have an account? Sign in',
+    scheduleAppointment: 'Schedule appointment',
+    selectDate: 'Select date (YYYY-MM-DD)',
+    loadSchedule: 'Load schedule',
+    confirmAppointment: 'Confirm appointment',
+    doctorRequired: 'Select a doctor.',
+    dateRequired: 'Select a date.',
+    slotRequired: 'Select an available slot.',
+    appointmentCreated: 'Appointment created successfully.',
+    close: 'Close',
+    available: 'Available',
+    occupied: 'Occupied',
   },
 };
 

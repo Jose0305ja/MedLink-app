@@ -41,3 +41,20 @@ export async function getAuthToken() {
   const token = auth.token ?? auth.accessToken ?? auth.access_token;
   return token ? String(token) : null;
 }
+
+export async function getCurrentUserRole() {
+  const auth = await getAuth();
+
+  if (!auth) {
+    return null;
+  }
+
+  const user = auth.user as { role?: unknown } | undefined;
+  const role = user?.role;
+
+  if (role === 'patient' || role === 'doctor') {
+    return role;
+  }
+
+  return null;
+}

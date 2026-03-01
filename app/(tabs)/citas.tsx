@@ -85,24 +85,36 @@ function toIsoDay(dateValue: Date) {
   return new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate()).toISOString().split('T')[0];
 }
 
-function getDateChipOptions(baseDate: string) {
-  const parsedDate = new Date(`${baseDate}T00:00:00`);
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const tomorrow = new Date(todayStart);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+function startOfDay(dateValue: Date) {
+  return new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate());
+}
 
-  const parsedStart = Number.isNaN(parsedDate.getTime())
-    ? tomorrow
-    : new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
+function isSameDay(leftDate: Date, rightDate: Date) {
+  return startOfDay(leftDate).getTime() === startOfDay(rightDate).getTime();
+}
 
-  const anchor = parsedStart > tomorrow ? parsedStart : tomorrow;
+function buildDateFromTime(selectedDateValue: string, timeValue: string) {
+  const [hoursPart, minutesPart] = timeValue.split(':');
+  const parsedHours = Number.parseInt(hoursPart ?? '0', 10);
+  const parsedMinutes = Number.parseInt(minutesPart ?? '0', 10);
+  const selected = new Date(`${selectedDateValue}T00:00:00`);
+
+  if (Number.isNaN(selected.getTime()) || Number.isNaN(parsedHours) || Number.isNaN(parsedMinutes)) {
+    return null;
+  }
+
+  selected.setHours(parsedHours, parsedMinutes, 0, 0);
+  return selected;
+}
+
+function getDateChipOptions() {
+  const todayStart = startOfDay(new Date());
   const dayFormat = new Intl.DateTimeFormat('es-ES', { weekday: 'short' });
   const monthFormat = new Intl.DateTimeFormat('es-ES', { month: 'short' });
 
-  return Array.from({ length: 7 }).map((_, index) => {
-    const currentDate = new Date(anchor);
-    currentDate.setDate(anchor.getDate() + index);
+  return Array.from({ length: 14 }).map((_, index) => {
+    const currentDate = new Date(todayStart);
+    currentDate.setDate(todayStart.getDate() + index);
 
     const dayLabel = dayFormat.format(currentDate).replace('.', '');
     const monthLabel = monthFormat.format(currentDate).replace('.', '');
@@ -259,7 +271,26 @@ export default function CitasScreen() {
               available: !bookedTimes.includes(slot.time),
             }));
 
-      const visibleSlots = normalizedSlots.filter((slot) => slot.available && !bookedTimes.includes(slot.time));
+      const selectedDateObject = new Date(`${selectedDate}T00:00:00`);
+      const isTodaySelection = !Number.isNaN(selectedDateObject.getTime()) && isSameDay(selectedDateObject, new Date());
+      const nowWithBuffer = new Date(Date.now() + 10 * 60 * 1000);
+
+      const visibleSlots = normalizedSlots.filter((slot) => {
+        if (!slot.available || bookedTimes.includes(slot.time)) {
+          return false;
+        }
+
+        if (!isTodaySelection) {
+          return true;
+        }
+
+        const slotDateTime = buildDateFromTime(selectedDate, slot.time);
+        if (!slotDateTime) {
+          return false;
+        }
+
+        return slotDateTime.getTime() > nowWithBuffer.getTime();
+      });
 
       setSlots(visibleSlots);
       setSelectedSlotId(null);
@@ -332,7 +363,7 @@ export default function CitasScreen() {
   };
 
   const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null;
-  const dateOptions = useMemo(() => getDateChipOptions(selectedDate), [selectedDate]);
+  const dateOptions = useMemo(() => getDateChipOptions(), []);
 
   useEffect(() => {
     if (!dateOptions.length) {

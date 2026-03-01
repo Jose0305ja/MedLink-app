@@ -65,7 +65,9 @@ type TranslationKey =
   | 'selectDoctor'
   | 'chooseExactDate'
   | 'availableSlots'
-  | 'calendarWeekdays';
+  | 'calendarWeekdays'
+  | 'markAsCompleted'
+  | 'markAsMissed';
 
 const translations: Record<Language, Record<TranslationKey, string>> = {
   es: {
@@ -132,6 +134,8 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     chooseExactDate: 'Elegir fecha exacta',
     availableSlots: 'Horarios disponibles',
     calendarWeekdays: 'L,M,X,J,V,S,D',
+    markAsCompleted: 'Marcar como completada',
+    markAsMissed: 'Marcar como no asistió',
   },
   en: {
     language: 'Language',
@@ -197,6 +201,8 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     chooseExactDate: 'Choose exact date',
     availableSlots: 'Available slots',
     calendarWeekdays: 'M,T,W,T,F,S,S',
+    markAsCompleted: 'Mark as completed',
+    markAsMissed: 'Mark as missed',
   },
 };
 

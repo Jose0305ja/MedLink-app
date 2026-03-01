@@ -426,6 +426,41 @@ export default function CitasScreen() {
     await loadDoctors();
   };
 
+  const updateAppointmentStatus = async (appointmentId: string, status: 'completada' | 'no_asistio') => {
+    if (!API_URL) {
+      Alert.alert(t('error'), t('missingApiUrl'));
+      return;
+    }
+
+    try {
+      const token = await getAuthToken();
+      setIsLoading(true);
+      const response = await fetch(`${API_URL}/appointments/${appointmentId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        Alert.alert(t('error'), data?.message ?? t('networkError'));
+        return;
+      }
+
+      if (role) {
+        await loadAppointments(role);
+      }
+    } catch {
+      Alert.alert(t('error'), t('networkError'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null;
   const dateOptions = useMemo(() => getDateChipOptions(), []);
   const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
@@ -460,17 +495,49 @@ export default function CitasScreen() {
     (appointment) => sanitizeStatus(appointment.status) === activeFilter,
   );
 
-  const renderCardActions = (status: AppointmentStatus) => {
+  const renderCardActions = (appointment: AppointmentItem, status: AppointmentStatus) => {
     const onPlaceholderPress = () => {};
+
+    if (role === 'doctor' && status === 'programada') {
+      return (
+        <View style={styles.actionsRow}>
+          <Pressable
+            onPress={() => updateAppointmentStatus(appointment.id, 'completada')}
+            disabled={isLoading}
+            style={[styles.actionButton, styles.primaryActionButton]}>
+            <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>{t('markAsCompleted')}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => updateAppointmentStatus(appointment.id, 'no_asistio')}
+            disabled={isLoading}
+            style={[styles.actionButton, styles.missedActionButton]}>
+            <Text style={[styles.actionButtonText, styles.missedActionButtonText]}>{t('markAsMissed')}</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    if (role !== 'doctor') {
+      if (status === 'programada') {
+        return (
+          <View style={styles.actionsRow}>
+            <Pressable
+              onPress={onPlaceholderPress}
+              style={[styles.actionButton, styles.primaryActionButton, styles.singleActionButton]}>
+              <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>{t('reschedule')}</Text>
+            </Pressable>
+          </View>
+        );
+      }
+
+      return null;
+    }
 
     if (status === 'programada') {
       return (
         <View style={styles.actionsRow}>
           <Pressable onPress={onPlaceholderPress} style={[styles.actionButton, styles.primaryActionButton]}>
             <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>{t('reschedule')}</Text>
-          </Pressable>
-          <Pressable onPress={onPlaceholderPress} style={[styles.actionButton, styles.secondaryActionButton]}>
-            <Text style={[styles.actionButtonText, styles.secondaryActionButtonText]}>{t('cancel')}</Text>
           </Pressable>
         </View>
       );
@@ -572,7 +639,7 @@ export default function CitasScreen() {
                   </View>
                 </View>
 
-                {renderCardActions(normalizedStatus)}
+                {renderCardActions(appointment, normalizedStatus)}
               </View>
             );
           })
@@ -982,6 +1049,14 @@ const createStyles = (colors: { background: string; card: string; text: string; 
   },
   secondaryActionButtonText: {
     color: colors.subtext,
+  },
+  missedActionButton: {
+    backgroundColor: isDark ? 'rgba(194,65,76,0.25)' : '#FDECEF',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,159,168,0.45)' : '#F4C9CF',
+  },
+  missedActionButtonText: {
+    color: isDark ? '#FFB7BF' : '#B84A5A',
   },
   actionButtonText: {
     fontWeight: '600',

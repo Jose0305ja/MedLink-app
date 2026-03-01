@@ -128,6 +128,53 @@ function getDateChipOptions() {
   });
 }
 
+
+function getCalendarDays(monthDate: Date) {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstDayOfMonth = new Date(year, month, 1);
+  const startOffset = (firstDayOfMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPreviousMonth = new Date(year, month, 0).getDate();
+
+  const cells: { date: Date; inCurrentMonth: boolean }[] = [];
+
+  for (let i = 0; i < startOffset; i += 1) {
+    const day = daysInPreviousMonth - startOffset + i + 1;
+    cells.push({ date: new Date(year, month - 1, day), inCurrentMonth: false });
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push({ date: new Date(year, month, day), inCurrentMonth: true });
+  }
+
+  while (cells.length % 7 !== 0) {
+    const day = cells.length - (startOffset + daysInMonth) + 1;
+    cells.push({ date: new Date(year, month + 1, day), inCurrentMonth: false });
+  }
+
+  return cells;
+}
+
+function isBeforeToday(dateValue: Date) {
+  return startOfDay(dateValue).getTime() < startOfDay(new Date()).getTime();
+}
+
+function formatSelectedDateLabel(isoDate: string) {
+  const parsed = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat('es-ES', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+    .format(parsed)
+    .replace('.', '');
+}
+
 export default function CitasScreen() {
   const { t } = useI18n();
   const [role, setRole] = useState<UserRole | null>(null);
@@ -142,6 +189,8 @@ export default function CitasScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<AppointmentFilter>('programada');
   const [showDoctorList, setShowDoctorList] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(startOfDay(new Date()));
 
   const loadAppointments = useCallback(
     async (currentRole: UserRole) => {
@@ -359,20 +408,21 @@ export default function CitasScreen() {
     setSlots([]);
     setHasLoadedSchedule(false);
     setShowDoctorList(true);
+    setShowCalendar(false);
+    setCalendarMonth(startOfDay(new Date()));
     await loadDoctors();
   };
 
   const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null;
   const dateOptions = useMemo(() => getDateChipOptions(), []);
+  const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
+  const selectedDateLabel = useMemo(() => formatSelectedDateLabel(selectedDate), [selectedDate]);
 
   useEffect(() => {
-    if (!dateOptions.length) {
-      return;
-    }
-
-    const hasValidSelectedDate = dateOptions.some((option) => option.value === selectedDate);
-    if (!hasValidSelectedDate) {
-      setSelectedDate(dateOptions[0].value);
+    const selectedParsed = new Date(`${selectedDate}T00:00:00`);
+    if (Number.isNaN(selectedParsed.getTime()) || isBeforeToday(selectedParsed)) {
+      const firstValidDate = dateOptions[0]?.value ?? toIsoDay(new Date());
+      setSelectedDate(firstValidDate);
       setSelectedSlotId(null);
       setHasLoadedSchedule(false);
       setSlots([]);
@@ -590,6 +640,13 @@ export default function CitasScreen() {
                   })}
                 </ScrollView>
 
+                <Pressable onPress={() => setShowCalendar(true)} style={styles.calendarTrigger}>
+                  <Ionicons name="calendar-outline" size={14} color="#2F6CCB" />
+                  <Text style={styles.calendarTriggerText}>Elegir fecha exacta</Text>
+                </Pressable>
+
+                {selectedDateLabel ? <Text style={styles.selectedDateText}>Fecha seleccionada: {selectedDateLabel}</Text> : null}
+
                 <Pressable onPress={loadSchedule} disabled={isLoading} style={styles.loadScheduleLinkWrap}>
                   <Text style={[styles.loadScheduleLink, isLoading ? styles.linkDisabled : null]}>{t('loadSchedule')}</Text>
                 </Pressable>
@@ -647,6 +704,88 @@ export default function CitasScreen() {
                 <Text style={styles.closeText}>{t('close')}</Text>
               </Pressable>
             </View>
+
+
+          <Modal visible={showCalendar} transparent animationType="fade" onRequestClose={() => setShowCalendar(false)}>
+            <View style={styles.calendarOverlay}>
+              <View style={styles.calendarCard}>
+                <View style={styles.calendarHeader}>
+                  <Pressable
+                    onPress={() =>
+                      setCalendarMonth(
+                        (current) => new Date(current.getFullYear(), current.getMonth() - 1, 1),
+                      )
+                    }
+                    style={styles.calendarArrowButton}>
+                    <Ionicons name="chevron-back" size={18} color="#2B3A51" />
+                  </Pressable>
+                  <Text style={styles.calendarTitle}>
+                    {new Intl.DateTimeFormat('es-ES', {
+                      month: 'long',
+                      year: 'numeric',
+                    }).format(calendarMonth)}
+                  </Text>
+                  <Pressable
+                    onPress={() =>
+                      setCalendarMonth(
+                        (current) => new Date(current.getFullYear(), current.getMonth() + 1, 1),
+                      )
+                    }
+                    style={styles.calendarArrowButton}>
+                    <Ionicons name="chevron-forward" size={18} color="#2B3A51" />
+                  </Pressable>
+                </View>
+
+                <View style={styles.calendarWeekRow}>
+                  {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day) => (
+                    <Text key={day} style={styles.calendarWeekDayLabel}>
+                      {day}
+                    </Text>
+                  ))}
+                </View>
+
+                <View style={styles.calendarGrid}>
+                  {calendarDays.map((cell) => {
+                    const isoValue = toIsoDay(cell.date);
+                    const isSelected = selectedDate === isoValue;
+                    const isDisabled = isBeforeToday(cell.date);
+
+                    return (
+                      <Pressable
+                        key={`${isoValue}-${cell.inCurrentMonth ? '1' : '0'}`}
+                        disabled={isDisabled}
+                        onPress={() => {
+                          setSelectedDate(isoValue);
+                          setSelectedSlotId(null);
+                          setHasLoadedSchedule(false);
+                          setSlots([]);
+                          setShowCalendar(false);
+                        }}
+                        style={[
+                          styles.calendarDay,
+                          !cell.inCurrentMonth ? styles.calendarDayMuted : null,
+                          isSelected ? styles.calendarDaySelected : null,
+                        ]}>
+                        <Text
+                          style={[
+                            styles.calendarDayText,
+                            !cell.inCurrentMonth ? styles.calendarDayTextMuted : null,
+                            isDisabled ? styles.calendarDayTextDisabled : null,
+                            isSelected ? styles.calendarDayTextSelected : null,
+                          ]}>
+                          {cell.date.getDate()}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Pressable onPress={() => setShowCalendar(false)} style={styles.calendarCloseButton}>
+                  <Text style={styles.calendarCloseText}>Cerrar</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
           </View>
         </SafeAreaView>
       </Modal>
@@ -1097,5 +1236,107 @@ const styles = StyleSheet.create({
     color: '#7B889D',
     fontSize: 13,
     fontWeight: '500',
+  },
+
+  calendarTrigger: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  calendarTriggerText: {
+    color: '#2F6CCB',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  selectedDateText: {
+    color: '#7C899E',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  calendarOverlay: {
+    flex: 1,
+    backgroundColor: '#00000033',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  calendarCard: {
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    gap: 10,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  calendarArrowButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F1F5FB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarTitle: {
+    color: '#24344B',
+    fontSize: 15,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  calendarWeekDayLabel: {
+    width: '14.28%',
+    textAlign: 'center',
+    color: '#97A4B7',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDay: {
+    width: '14.28%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  calendarDayMuted: {
+    opacity: 0.6,
+  },
+  calendarDaySelected: {
+    backgroundColor: '#2F6CCB',
+  },
+  calendarDayText: {
+    color: '#2D3D56',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  calendarDayTextMuted: {
+    color: '#A8B4C6',
+  },
+  calendarDayTextDisabled: {
+    color: '#C5CEDA',
+  },
+  calendarDayTextSelected: {
+    color: '#FFFFFF',
+  },
+  calendarCloseButton: {
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  calendarCloseText: {
+    color: '#60728F',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

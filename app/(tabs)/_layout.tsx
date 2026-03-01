@@ -3,7 +3,7 @@ import { useI18n } from '@/lib/i18n-context';
 import { useAppTheme } from '@/lib/theme-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs, router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 function ThemeToggle({
@@ -12,12 +12,18 @@ function ThemeToggle({
   onSelectDark,
   lightLabel,
   darkLabel,
+  styles,
+  primary,
+  subtext,
 }: {
   isDark: boolean;
   onSelectLight: () => void;
   onSelectDark: () => void;
   lightLabel: string;
   darkLabel: string;
+  styles: ReturnType<typeof createStyles>;
+  primary: string;
+  subtext: string;
 }) {
   return (
     <View style={styles.themeControl}>
@@ -26,14 +32,14 @@ function ThemeToggle({
         accessibilityRole="button"
         accessibilityLabel={lightLabel}
         style={[styles.themeButton, !isDark && styles.themeButtonActive]}>
-        <Ionicons name="sunny" size={16} color={!isDark ? '#3D77CC' : '#8D99AE'} />
+        <Ionicons name="sunny" size={16} color={!isDark ? primary : subtext} />
       </Pressable>
       <Pressable
         onPress={onSelectDark}
         accessibilityRole="button"
         accessibilityLabel={darkLabel}
         style={[styles.themeButton, isDark && styles.themeButtonActive]}>
-        <Ionicons name="moon" size={16} color={isDark ? '#3D77CC' : '#8D99AE'} />
+        <Ionicons name="moon" size={16} color={isDark ? primary : subtext} />
       </Pressable>
     </View>
   );
@@ -44,11 +50,13 @@ function LanguageSwitcher({
   onChange,
   spanishLabel,
   englishLabel,
+  styles,
 }: {
   language: 'es' | 'en';
   onChange: (language: 'es' | 'en') => void;
   spanishLabel: string;
   englishLabel: string;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.segmentedContainer}>
@@ -70,10 +78,20 @@ function LanguageSwitcher({
   );
 }
 
-function LogoutButton({ label, onPress }: { label: string; onPress: () => void }) {
+function LogoutButton({
+  label,
+  onPress,
+  styles,
+  primary,
+}: {
+  label: string;
+  onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+  primary: string;
+}) {
   return (
     <Pressable onPress={onPress} hitSlop={10} style={styles.logoutButton} accessibilityLabel={label}>
-      <Ionicons name="log-out-outline" size={15} color="#3D77CC" />
+      <Ionicons name="log-out-outline" size={15} color={primary} />
       <Text style={styles.logoutText}>{label}</Text>
     </Pressable>
   );
@@ -82,8 +100,9 @@ function LogoutButton({ label, onPress }: { label: string; onPress: () => void }
 export default function TabLayout() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const { isDark, toggleTheme } = useAppTheme();
+  const { isDark, colors, toggleTheme } = useAppTheme();
   const { language, setLanguage, t } = useI18n();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -133,6 +152,9 @@ export default function TabLayout() {
             }}
             lightLabel={t('lightMode')}
             darkLabel={t('darkMode')}
+            styles={styles}
+            primary={colors.primary}
+            subtext={colors.subtext}
           />
         ),
         headerTitle: () => (
@@ -141,14 +163,17 @@ export default function TabLayout() {
             onChange={(nextLanguage) => setLanguage(nextLanguage)}
             spanishLabel={t('spanish')}
             englishLabel={t('english')}
+            styles={styles}
           />
         ),
-        headerRight: () => <LogoutButton label={t('signOut')} onPress={handleLogout} />,
+        headerRight: () => (
+          <LogoutButton label={t('signOut')} onPress={handleLogout} styles={styles} primary={colors.primary} />
+        ),
         sceneStyle: styles.scene,
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabLabel,
-        tabBarActiveTintColor: '#3D77CC',
-        tabBarInactiveTintColor: '#8D99AE',
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.subtext,
       }}>
       <Tabs.Screen
         name="index"
@@ -177,96 +202,101 @@ export default function TabLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    backgroundColor: '#F7F9FC',
-    height: 96,
-  },
-  headerSide: {
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-  },
-  headerCenter: {
-    justifyContent: 'center',
-  },
-  themeControl: {
-    flexDirection: 'row',
-    backgroundColor: '#EDF2F8',
-    borderRadius: 999,
-    padding: 3,
-    alignItems: 'center',
-    minHeight: 40,
-  },
-  themeButton: {
-    width: 36,
-    height: 34,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  themeButtonActive: {
-    backgroundColor: '#DCE9FF',
-  },
-  segmentedContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#EDF2F8',
-    borderRadius: 999,
-    padding: 3,
-    alignItems: 'center',
-    minHeight: 40,
-  },
-  segmentButton: {
-    minWidth: 44,
-    height: 34,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segmentButtonActive: {
-    backgroundColor: '#DCE9FF',
-  },
-  segmentLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#7D8798',
-  },
-  segmentLabelActive: {
-    color: '#3D77CC',
-  },
-  logoutButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#D9E4F5',
-    flexDirection: 'row',
-    gap: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 40,
-  },
-  logoutText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#3D77CC',
-  },
-  scene: {
-    backgroundColor: '#F7F9FC',
-  },
-  tabBar: {
-    height: 72,
-    paddingTop: 8,
-    paddingBottom: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#EAEFF6',
-    backgroundColor: '#FFFFFF',
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-});
+const createStyles = (
+  colors: { background: string; card: string; text: string; subtext: string; border: string; primary: string; pillBg: string },
+  isDark: boolean,
+) =>
+  StyleSheet.create({
+    header: {
+      backgroundColor: colors.background,
+      height: 96,
+    },
+    headerSide: {
+      paddingHorizontal: 20,
+      justifyContent: 'center',
+    },
+    headerCenter: {
+      justifyContent: 'center',
+    },
+    themeControl: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? 'rgba(234,240,255,0.10)' : '#EDF2F8',
+      borderRadius: 999,
+      padding: 3,
+      alignItems: 'center',
+      minHeight: 40,
+    },
+    themeButton: {
+      width: 36,
+      height: 34,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    themeButtonActive: {
+      backgroundColor: colors.pillBg,
+    },
+    segmentedContainer: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? 'rgba(234,240,255,0.10)' : '#EDF2F8',
+      borderRadius: 999,
+      padding: 3,
+      alignItems: 'center',
+      minHeight: 40,
+    },
+    segmentButton: {
+      minWidth: 44,
+      height: 34,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    segmentButtonActive: {
+      backgroundColor: colors.pillBg,
+    },
+    segmentLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.subtext,
+    },
+    segmentLabelActive: {
+      color: colors.primary,
+    },
+    logoutButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      flexDirection: 'row',
+      gap: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 40,
+      backgroundColor: colors.card,
+    },
+    logoutText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    scene: {
+      backgroundColor: colors.background,
+    },
+    tabBar: {
+      height: 72,
+      paddingTop: 8,
+      paddingBottom: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.card,
+      elevation: 0,
+      shadowOpacity: 0,
+    },
+    tabLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      marginTop: 2,
+    },
+  });

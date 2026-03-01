@@ -58,7 +58,14 @@ type TranslationKey =
   | 'cancel'
   | 'viewDetails'
   | 'medicalConsultation'
-  | 'scheduleAppointmentTitle';
+  | 'scheduleAppointmentTitle'
+  | 'doctorSection'
+  | 'specialistGeneral'
+  | 'change'
+  | 'selectDoctor'
+  | 'chooseExactDate'
+  | 'availableSlots'
+  | 'calendarWeekdays';
 
 const translations: Record<Language, Record<TranslationKey, string>> = {
   es: {
@@ -118,6 +125,13 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     viewDetails: 'Ver detalles',
     medicalConsultation: 'Consulta médica',
     scheduleAppointmentTitle: 'Agendar cita',
+    doctorSection: 'Doctor',
+    specialistGeneral: 'Medicina general',
+    change: 'Cambiar',
+    selectDoctor: 'Selecciona un doctor',
+    chooseExactDate: 'Elegir fecha exacta',
+    availableSlots: 'Horarios disponibles',
+    calendarWeekdays: 'L,M,X,J,V,S,D',
   },
   en: {
     language: 'Language',
@@ -176,6 +190,13 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     viewDetails: 'View details',
     medicalConsultation: 'Medical consultation',
     scheduleAppointmentTitle: 'Schedule appointment',
+    doctorSection: 'Doctor',
+    specialistGeneral: 'General medicine',
+    change: 'Change',
+    selectDoctor: 'Select a doctor',
+    chooseExactDate: 'Choose exact date',
+    availableSlots: 'Available slots',
+    calendarWeekdays: 'M,T,W,T,F,S,S',
   },
 };
 

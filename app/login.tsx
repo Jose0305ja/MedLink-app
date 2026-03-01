@@ -121,6 +121,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.backgroundTint} />
+      <View style={styles.backgroundGlow} />
       <KeyboardAvoidingView style={styles.keyboardContainer} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
@@ -130,18 +131,18 @@ export default function LoginScreen() {
         >
           <View style={styles.languageRowWrapper}>
             <View style={styles.languageRow}>
-            <Pressable
-              style={[styles.langChip, language === 'es' && styles.langChipActive]}
-              onPress={() => setLanguage('es')}
-            >
-              <Text style={[styles.langText, language === 'es' && styles.langTextActive]}>ES</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.langChip, language === 'en' && styles.langChipActive]}
-              onPress={() => setLanguage('en')}
-            >
-              <Text style={[styles.langText, language === 'en' && styles.langTextActive]}>EN</Text>
-            </Pressable>
+              <Pressable
+                style={[styles.langChip, language === 'es' && styles.langChipActive]}
+                onPress={() => setLanguage('es')}
+              >
+                <Text style={[styles.langText, language === 'es' && styles.langTextActive]}>ES</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.langChip, language === 'en' && styles.langChipActive]}
+                onPress={() => setLanguage('en')}
+              >
+                <Text style={[styles.langText, language === 'en' && styles.langTextActive]}>EN</Text>
+              </Pressable>
             </View>
           </View>
 
@@ -151,7 +152,11 @@ export default function LoginScreen() {
             </View>
 
             <Text style={styles.title}>MediSync</Text>
-            <Text style={styles.subtitle}>{language === 'es' ? 'Tu puente seguro entre pacientes y doctores.' : 'Your secure bridge between patients and doctors.'}</Text>
+            <Text style={styles.subtitle}>
+              {language === 'es'
+                ? 'Tu puente seguro entre pacientes y doctores.'
+                : 'Your secure bridge between patients and doctors.'}
+            </Text>
 
             {isRegisterMode ? (
               <View style={styles.inputCard}>
@@ -159,21 +164,21 @@ export default function LoginScreen() {
                 <TextInput
                   value={name}
                   onChangeText={setName}
-                  placeholder="Antonio Delgado"
+                  placeholder="Nombre"
                   placeholderTextColor="#A7B1C2"
                   style={styles.input}
                 />
               </View>
             ) : null}
 
-            <View style={[styles.inputCard, styles.inputSpacing]}>
+            <View style={[styles.inputCard, isRegisterMode ? styles.inputSpacing : styles.firstInputSpacing]}>
               <Feather name="mail" size={20} color="#7B8AA3" />
               <TextInput
                 autoCapitalize="none"
                 keyboardType="email-address"
                 value={email}
                 onChangeText={setEmail}
-                placeholder={t('email')}
+                placeholder={language === 'es' ? 'Correo' : t('email')}
                 placeholderTextColor="#A7B1C2"
                 style={styles.input}
               />
@@ -186,19 +191,48 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
-                placeholder={t('password')}
+                placeholder={language === 'es' ? 'Contraseña' : t('password')}
                 placeholderTextColor="#A7B1C2"
                 style={styles.input}
               />
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel={showPassword ? (language === 'es' ? 'Ocultar contraseña' : 'Hide password') : language === 'es' ? 'Mostrar contraseña' : 'Show password'}
+                accessibilityLabel={
+                  showPassword
+                    ? language === 'es'
+                      ? 'Ocultar contraseña'
+                      : 'Hide password'
+                    : language === 'es'
+                      ? 'Mostrar contraseña'
+                      : 'Show password'
+                }
                 onPress={() => setShowPassword((current) => !current)}
                 style={styles.eyeButton}
               >
                 <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#7B8AA3" />
               </TouchableOpacity>
             </View>
+
+            {isRegisterMode ? (
+              <View style={styles.segmentedContainer}>
+                <Pressable
+                  onPress={() => setRole('patient')}
+                  style={[styles.segmentItem, role === 'patient' && styles.segmentItemActive]}
+                >
+                  <Text style={[styles.segmentText, role === 'patient' && styles.segmentTextActive]}>
+                    {language === 'es' ? 'Paciente' : 'Patient'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setRole('doctor')}
+                  style={[styles.segmentItem, role === 'doctor' && styles.segmentItemActive]}
+                >
+                  <Text style={[styles.segmentText, role === 'doctor' && styles.segmentTextActive]}>
+                    {language === 'es' ? 'Doctor' : 'Doctor'}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               onPress={isRegisterMode ? handleRegister : handleLogin}
@@ -209,7 +243,7 @@ export default function LoginScreen() {
               {isLoading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.submitText}>{isRegisterMode ? t('register') : t('login')}</Text>
+                <Text style={styles.submitText}>{isRegisterMode ? 'Registrarse' : 'Ingresar'}</Text>
               )}
             </TouchableOpacity>
 
@@ -223,7 +257,9 @@ export default function LoginScreen() {
               >
                 <Text style={styles.footerText}>
                   {isRegisterMode
-                    ? t('goToLogin')
+                    ? language === 'es'
+                      ? '¿Ya tienes cuenta? Inicia sesión'
+                      : 'Already have an account? Log in'
                     : language === 'es'
                       ? '¿No tienes cuenta? Regístrate aquí'
                       : "Don't have an account? Register here"}
@@ -244,8 +280,18 @@ const styles = StyleSheet.create({
   },
   backgroundTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#F6F9FF',
-    opacity: 0.35,
+    backgroundColor: '#F7FAFF',
+    opacity: 0.65,
+  },
+  backgroundGlow: {
+    position: 'absolute',
+    top: -120,
+    right: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: '#DCE8FF',
+    opacity: 0.22,
   },
   keyboardContainer: {
     flex: 1,
@@ -268,7 +314,7 @@ const styles = StyleSheet.create({
   },
   langChip: {
     borderWidth: 1,
-    borderColor: 'rgba(47,107,255,0.25)',
+    borderColor: 'rgba(47,107,255,0.2)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -319,20 +365,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9AA3B2',
     marginBottom: 18,
+    textAlign: 'center',
   },
   inputCard: {
     width: '100%',
     minHeight: 56,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(47,107,255,0.35)',
+    borderColor: 'rgba(47,107,255,0.28)',
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
   },
+  firstInputSpacing: {
+    marginTop: 2,
+  },
   inputSpacing: {
-    marginTop: 18,
+    marginTop: 14,
   },
   input: {
     flex: 1,
@@ -344,6 +394,33 @@ const styles = StyleSheet.create({
   eyeButton: {
     paddingLeft: 10,
     paddingVertical: 8,
+  },
+  segmentedContainer: {
+    width: '100%',
+    marginTop: 14,
+    padding: 4,
+    borderRadius: 16,
+    backgroundColor: '#F1F5FD',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  segmentItem: {
+    flex: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  segmentItemActive: {
+    backgroundColor: '#2F6BFF',
+  },
+  segmentText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7A93',
+  },
+  segmentTextActive: {
+    color: '#FFFFFF',
   },
   submitButton: {
     width: '100%',

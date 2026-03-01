@@ -360,9 +360,6 @@ export default function CitasScreen() {
     [t],
   );
 
-  const loadSchedule = async () => {
-    await loadScheduleForSelection(selectedDoctorId ?? '', selectedDate, true);
-  };
 
   const createAppointment = async () => {
     if (!API_URL) {
@@ -668,9 +665,6 @@ export default function CitasScreen() {
 
                 {selectedDateLabel ? <Text style={styles.selectedDateText}>Fecha seleccionada: {selectedDateLabel}</Text> : null}
 
-                <Pressable onPress={loadSchedule} disabled={isLoading} style={styles.loadScheduleLinkWrap}>
-                  <Text style={[styles.loadScheduleLink, isLoading ? styles.linkDisabled : null]}>{t('loadSchedule')}</Text>
-                </Pressable>
               </View>
 
               {hasLoadedSchedule && slots.length === 0 ? <Text style={styles.noSlotsText}>{t('noSlotsForDay')}</Text> : null}
@@ -1151,18 +1145,6 @@ const styles = StyleSheet.create({
   },
   dateChipMonthSelected: {
     color: '#E6F0FF',
-  },
-  loadScheduleLinkWrap: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  loadScheduleLink: {
-    color: '#2F6CCB',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  linkDisabled: {
-    opacity: 0.55,
   },
   noSlotsText: {
     color: '#7A869B',

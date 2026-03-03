@@ -1,3 +1,4 @@
+import { darkColors, lightColors, type AppThemeColors } from '@/constants/theme';
 import { createContext, ReactNode, useContext, useMemo, useState } from 'react';
 
 export type AppTheme = 'light' | 'dark';
@@ -5,6 +6,7 @@ export type AppTheme = 'light' | 'dark';
 type ThemeContextValue = {
   theme: AppTheme;
   isDark: boolean;
+  colors: AppThemeColors;
   toggleTheme: () => void;
 };
 
@@ -17,6 +19,7 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
     () => ({
       theme,
       isDark: theme === 'dark',
+      colors: theme === 'dark' ? darkColors : lightColors,
       toggleTheme: () => setTheme((current) => (current === 'dark' ? 'light' : 'dark')),
     }),
     [theme],

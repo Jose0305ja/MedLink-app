@@ -1,5 +1,6 @@
 import { getAuthToken, getCurrentUserRole } from '@/lib/auth-storage';
 import { useI18n } from '@/lib/i18n-context';
+import { useAppTheme } from '@/lib/theme-context';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -49,17 +50,7 @@ type AppointmentItem = {
   status: string;
 };
 
-const statusLabelMap: Record<AppointmentStatus, string> = {
-  programada: 'Programada',
-  completada: 'Completada',
-  no_asistio: 'No asistió',
-};
-
-const filterTabs: { label: string; value: AppointmentFilter }[] = [
-  { label: 'Próximas', value: 'programada' },
-  { label: 'Completadas', value: 'completada' },
-  { label: 'No asistió', value: 'no_asistio' },
-];
+const filterTabs: AppointmentFilter[] = ['programada', 'completada', 'no_asistio'];
 
 function getStatusBadgeStyle(status: AppointmentStatus) {
   if (status === 'completada') {
@@ -176,7 +167,8 @@ function formatSelectedDateLabel(isoDate: string) {
 }
 
 export default function CitasScreen() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const { colors, isDark } = useAppTheme();
   const [role, setRole] = useState<UserRole | null>(null);
   const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -191,6 +183,17 @@ export default function CitasScreen() {
   const [showDoctorList, setShowDoctorList] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(startOfDay(new Date()));
+
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+
+  const statusLabelMap: Record<AppointmentStatus, string> = useMemo(
+    () => ({
+      programada: t('upcoming'),
+      completada: t('completed'),
+      no_asistio: t('missed'),
+    }),
+    [t],
+  );
 
   const loadAppointments = useCallback(
     async (currentRole: UserRole) => {
@@ -322,7 +325,7 @@ export default function CitasScreen() {
               .filter((slot: unknown): slot is Slot =>
                 Boolean(slot && typeof slot === 'object' && 'schedule_id' in slot && 'time' in slot),
               )
-              .map((slot) => ({
+              .map((slot: Slot) => ({
                 ...slot,
                 available: !bookedTimes.includes(slot.time),
               }));
@@ -423,6 +426,41 @@ export default function CitasScreen() {
     await loadDoctors();
   };
 
+  const updateAppointmentStatus = async (appointmentId: string, status: 'completada' | 'no_asistio') => {
+    if (!API_URL) {
+      Alert.alert(t('error'), t('missingApiUrl'));
+      return;
+    }
+
+    try {
+      const token = await getAuthToken();
+      setIsLoading(true);
+      const response = await fetch(`${API_URL}/appointments/${appointmentId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        Alert.alert(t('error'), data?.message ?? t('networkError'));
+        return;
+      }
+
+      if (role) {
+        await loadAppointments(role);
+      }
+    } catch {
+      Alert.alert(t('error'), t('networkError'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null;
   const dateOptions = useMemo(() => getDateChipOptions(), []);
   const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
@@ -457,17 +495,49 @@ export default function CitasScreen() {
     (appointment) => sanitizeStatus(appointment.status) === activeFilter,
   );
 
-  const renderCardActions = (status: AppointmentStatus) => {
+  const renderCardActions = (appointment: AppointmentItem, status: AppointmentStatus) => {
     const onPlaceholderPress = () => {};
+
+    if (role === 'doctor' && status === 'programada') {
+      return (
+        <View style={styles.actionsRow}>
+          <Pressable
+            onPress={() => updateAppointmentStatus(appointment.id, 'completada')}
+            disabled={isLoading}
+            style={[styles.actionButton, styles.primaryActionButton]}>
+            <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>{t('markAsCompleted')}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => updateAppointmentStatus(appointment.id, 'no_asistio')}
+            disabled={isLoading}
+            style={[styles.actionButton, styles.missedActionButton]}>
+            <Text style={[styles.actionButtonText, styles.missedActionButtonText]}>{t('markAsMissed')}</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    if (role !== 'doctor') {
+      if (status === 'programada') {
+        return (
+          <View style={styles.actionsRow}>
+            <Pressable
+              onPress={onPlaceholderPress}
+              style={[styles.actionButton, styles.primaryActionButton, styles.singleActionButton]}>
+              <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>{t('reschedule')}</Text>
+            </Pressable>
+          </View>
+        );
+      }
+
+      return null;
+    }
 
     if (status === 'programada') {
       return (
         <View style={styles.actionsRow}>
           <Pressable onPress={onPlaceholderPress} style={[styles.actionButton, styles.primaryActionButton]}>
-            <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>Reprogramar</Text>
-          </Pressable>
-          <Pressable onPress={onPlaceholderPress} style={[styles.actionButton, styles.secondaryActionButton]}>
-            <Text style={[styles.actionButtonText, styles.secondaryActionButtonText]}>Cancelar</Text>
+            <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>{t('reschedule')}</Text>
           </Pressable>
         </View>
       );
@@ -479,43 +549,35 @@ export default function CitasScreen() {
           <Pressable
             onPress={onPlaceholderPress}
             style={[styles.actionButton, styles.secondaryActionButton, styles.singleActionButton]}>
-            <Text style={[styles.actionButtonText, styles.secondaryActionButtonText]}>Ver detalles</Text>
+            <Text style={[styles.actionButtonText, styles.secondaryActionButtonText]}>{t('viewDetails')}</Text>
           </Pressable>
         </View>
       );
     }
 
-    return (
-      <View style={styles.actionsRow}>
-        <Pressable
-          onPress={onPlaceholderPress}
-          style={[styles.actionButton, styles.primaryActionButton, styles.singleActionButton]}>
-          <Text style={[styles.actionButtonText, styles.primaryActionButtonText]}>Agendar nueva cita</Text>
-        </Pressable>
-      </View>
-    );
+    return null;
   };
 
   return (
     <View style={styles.screen}>
       <View style={styles.topSection}>
-        <Text style={styles.title}>Mis citas</Text>
+        <Text style={styles.title}>{t('appointments')}</Text>
         {role === 'patient' ? (
           <Pressable onPress={openScheduler} style={styles.scheduleButton}>
-            <Text style={styles.scheduleButtonText}>Agendar cita</Text>
+            <Text style={styles.scheduleButtonText}>{t('scheduleAppointment')}</Text>
           </Pressable>
         ) : null}
       </View>
 
       <View style={styles.tabsRow}>
         {filterTabs.map((tab) => {
-          const isActive = activeFilter === tab.value;
+          const isActive = activeFilter === tab;
           return (
             <Pressable
-              key={tab.value}
-              onPress={() => setActiveFilter(tab.value)}
+              key={tab}
+              onPress={() => setActiveFilter(tab)}
               style={[styles.tabButton, isActive ? styles.activeTabButton : null]}>
-              <Text style={[styles.tabButtonText, isActive ? styles.activeTabButtonText : null]}>{tab.label}</Text>
+              <Text style={[styles.tabButtonText, isActive ? styles.activeTabButtonText : null]}>{statusLabelMap[tab]}</Text>
             </Pressable>
           );
         })}
@@ -537,13 +599,13 @@ export default function CitasScreen() {
                 <View style={styles.cardHeader}>
                   <View style={styles.profileBlock}>
                     <View style={styles.avatarPlaceholder}>
-                      <Ionicons name="person-outline" size={18} color="#8A95A9" />
+                      <Ionicons name="person-outline" size={18} color={colors.subtext} />
                     </View>
 
                     <View style={styles.profileTextBlock}>
                       <Text style={styles.doctorName}>{mainName ?? '-'}</Text>
                       <Text style={styles.specialtyText}>
-                        {role === 'doctor' ? 'Paciente' : 'Consulta médica'}
+                        {role === 'doctor' ? t('patientLabel') : t('medicalConsultation')}
                       </Text>
                     </View>
                   </View>
@@ -557,19 +619,19 @@ export default function CitasScreen() {
 
                 <View style={styles.dateTimeContainer}>
                   <View style={styles.dateTimeItem}>
-                    <Ionicons name="calendar-outline" size={16} color="#71809A" />
+                    <Ionicons name="calendar-outline" size={16} color={colors.subtext} />
                     <Text style={styles.dateTimeText}>{formatRawDate(appointment.date)}</Text>
                   </View>
 
                   <View style={styles.timeDivider} />
 
                   <View style={styles.dateTimeItem}>
-                    <Ionicons name="time-outline" size={16} color="#71809A" />
+                    <Ionicons name="time-outline" size={16} color={colors.subtext} />
                     <Text style={styles.dateTimeText}>{appointment.time}</Text>
                   </View>
                 </View>
 
-                {renderCardActions(normalizedStatus)}
+                {renderCardActions(appointment, normalizedStatus)}
               </View>
             );
           })
@@ -581,28 +643,28 @@ export default function CitasScreen() {
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Pressable onPress={() => setShowModal(false)} style={styles.backButton}>
-                <Ionicons name="chevron-back" size={18} color="#2B3A51" />
+                <Ionicons name="chevron-back" size={18} color={colors.text} />
               </Pressable>
-              <Text style={styles.modalTitle}>Agendar Cita</Text>
+              <Text style={styles.modalTitle}>{t('scheduleAppointmentTitle')}</Text>
               <View style={styles.headerSpacer} />
             </View>
 
             <ScrollView contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
               <View style={styles.sectionBlock}>
-                <Text style={styles.sectionLabel}>Doctor</Text>
+                <Text style={styles.sectionLabel}>{t('doctorSection')}</Text>
 
                 <View style={styles.doctorCard}>
                   <View style={styles.doctorAvatar}>
-                    <Ionicons name="person-outline" size={18} color="#8593AA" />
+                    <Ionicons name="person-outline" size={18} color={colors.subtext} />
                   </View>
 
                   <View style={styles.doctorInfo}>
-                    <Text style={styles.doctorCardName}>{selectedDoctor?.name ?? 'Selecciona un doctor'}</Text>
-                    <Text style={styles.doctorCardSpecialty}>Medicina general</Text>
+                    <Text style={styles.doctorCardName}>{selectedDoctor?.name ?? t('selectDoctor')}</Text>
+                    <Text style={styles.doctorCardSpecialty}>{t('specialistGeneral')}</Text>
                   </View>
 
                   <Pressable onPress={() => setShowDoctorList((current) => !current)}>
-                    <Text style={styles.changeDoctorText}>Cambiar</Text>
+                    <Text style={styles.changeDoctorText}>{t('change')}</Text>
                   </Pressable>
                 </View>
 
@@ -631,7 +693,7 @@ export default function CitasScreen() {
               </View>
 
               <View style={styles.sectionBlock}>
-                <Text style={styles.sectionLabel}>Selecciona una fecha</Text>
+                <Text style={styles.sectionLabel}>{t('selectDate').replace(' (YYYY-MM-DD)', '')}</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -659,18 +721,20 @@ export default function CitasScreen() {
                 </ScrollView>
 
                 <Pressable onPress={() => setShowCalendar(true)} style={styles.calendarTrigger}>
-                  <Ionicons name="calendar-outline" size={14} color="#2F6CCB" />
-                  <Text style={styles.calendarTriggerText}>Elegir fecha exacta</Text>
+                  <Ionicons name="calendar-outline" size={14} color={colors.primary} />
+                  <Text style={styles.calendarTriggerText}>{t('chooseExactDate')}</Text>
                 </Pressable>
 
-                {selectedDateLabel ? <Text style={styles.selectedDateText}>Fecha seleccionada: {selectedDateLabel}</Text> : null}
+                {selectedDateLabel ? <Text style={styles.selectedDateText}>{`${t('dateLabel')}: ${selectedDateLabel}`}</Text> : null}
 
               </View>
 
               {hasLoadedSchedule && slots.length === 0 ? <Text style={styles.noSlotsText}>{t('noSlotsForDay')}</Text> : null}
 
               {slots.length > 0 ? (
-                <View style={styles.slotsGrid}>
+                <>
+                  <Text style={styles.sectionLabel}>{t('availableSlots')}</Text>
+                  <View style={styles.slotsGrid}>
                   {slots.map((slot) => {
                     const isSelected = selectedSlotId === slot.schedule_id;
 
@@ -700,7 +764,8 @@ export default function CitasScreen() {
                       </Pressable>
                     );
                   })}
-                </View>
+                  </View>
+                </>
               ) : null}
             </ScrollView>
 
@@ -732,10 +797,10 @@ export default function CitasScreen() {
                       )
                     }
                     style={styles.calendarArrowButton}>
-                    <Ionicons name="chevron-back" size={18} color="#2B3A51" />
+                    <Ionicons name="chevron-back" size={18} color={colors.text} />
                   </Pressable>
                   <Text style={styles.calendarTitle}>
-                    {new Intl.DateTimeFormat('es-ES', {
+                    {new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'es-ES', {
                       month: 'long',
                       year: 'numeric',
                     }).format(calendarMonth)}
@@ -747,12 +812,12 @@ export default function CitasScreen() {
                       )
                     }
                     style={styles.calendarArrowButton}>
-                    <Ionicons name="chevron-forward" size={18} color="#2B3A51" />
+                    <Ionicons name="chevron-forward" size={18} color={colors.text} />
                   </Pressable>
                 </View>
 
                 <View style={styles.calendarWeekRow}>
-                  {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day) => (
+                  {t('calendarWeekdays').split(',').map((day) => (
                     <Text key={day} style={styles.calendarWeekDayLabel}>
                       {day}
                     </Text>
@@ -808,13 +873,13 @@ export default function CitasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: { background: string; card: string; text: string; subtext: string; border: string; primary: string; pillBg: string }, isDark: boolean) => StyleSheet.create({
   screen: {
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 18,
     gap: 14,
-    backgroundColor: '#F7F9FC',
+    backgroundColor: colors.background,
   },
   topSection: {
     flexDirection: 'row',
@@ -824,16 +889,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#1A2233',
+    color: colors.text,
   },
   scheduleButton: {
-    backgroundColor: '#EAF2FF',
+    backgroundColor: colors.pillBg,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 14,
   },
   scheduleButtonText: {
-    color: '#346FCA',
+    color: colors.primary,
     fontWeight: '600',
     fontSize: 14,
   },
@@ -845,18 +910,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#EEF1F6',
+    backgroundColor: isDark ? 'rgba(234,240,255,0.08)' : '#EEF1F6',
   },
   activeTabButton: {
-    backgroundColor: '#E5EEFD',
+    backgroundColor: colors.pillBg,
   },
   tabButtonText: {
-    color: '#6B7383',
+    color: colors.subtext,
     fontSize: 13,
     fontWeight: '500',
   },
   activeTabButtonText: {
-    color: '#316BC2',
+    color: colors.primary,
     fontWeight: '700',
   },
   cardsList: {
@@ -865,17 +930,17 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     borderWidth: 1,
-    borderColor: '#E2E7EF',
+    borderColor: colors.border,
     borderRadius: 16,
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
   },
   appointmentCard: {
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     padding: 16,
     gap: 14,
-    shadowColor: '#0D1A2A',
+    shadowColor: isDark ? 'transparent' : '#0D1A2A',
     shadowOpacity: 0.07,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
@@ -896,7 +961,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 999,
-    backgroundColor: '#F1F4F9',
+    backgroundColor: isDark ? 'rgba(234,240,255,0.08)' : '#F1F4F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -907,11 +972,11 @@ const styles = StyleSheet.create({
   doctorName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1D2739',
+    color: colors.text,
   },
   specialtyText: {
     fontSize: 13,
-    color: '#7B879A',
+    color: colors.subtext,
   },
   badge: {
     borderRadius: 999,
@@ -924,7 +989,7 @@ const styles = StyleSheet.create({
   },
   dateTimeContainer: {
     borderRadius: 14,
-    backgroundColor: '#F4F7FB',
+    backgroundColor: isDark ? 'rgba(234,240,255,0.06)' : '#F4F7FB',
     paddingHorizontal: 12,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -939,14 +1004,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dateTimeText: {
-    color: '#415066',
+    color: colors.text,
     fontWeight: '500',
     fontSize: 13,
   },
   timeDivider: {
     width: 1,
     height: 18,
-    backgroundColor: '#D5DDE8',
+    backgroundColor: colors.border,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -964,18 +1029,26 @@ const styles = StyleSheet.create({
     minWidth: 170,
   },
   primaryActionButton: {
-    backgroundColor: '#E5EEFD',
+    backgroundColor: colors.pillBg,
   },
   primaryActionButtonText: {
-    color: '#2E65BC',
+    color: colors.primary,
   },
   secondaryActionButton: {
     borderWidth: 1,
-    borderColor: '#D6DEEA',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.border,
+    backgroundColor: colors.card,
   },
   secondaryActionButtonText: {
-    color: '#56657D',
+    color: colors.subtext,
+  },
+  missedActionButton: {
+    backgroundColor: isDark ? 'rgba(194,65,76,0.25)' : '#FDECEF',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,159,168,0.45)' : '#F4C9CF',
+  },
+  missedActionButtonText: {
+    color: isDark ? '#FFB7BF' : '#B84A5A',
   },
   actionButtonText: {
     fontWeight: '600',
@@ -983,7 +1056,7 @@ const styles = StyleSheet.create({
   },
   modalSafeArea: {
     flex: 1,
-    backgroundColor: '#F7F9FC',
+    backgroundColor: colors.background,
   },
   modalContainer: {
     flex: 1,
@@ -1003,7 +1076,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EFF4FB',
+    backgroundColor: isDark ? 'rgba(234,240,255,0.10)' : '#EFF4FB',
   },
   modalTitle: {
     fontSize: 19,
@@ -1024,18 +1097,18 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 12,
-    color: '#7E8AA0',
+    color: colors.subtext,
     fontWeight: '600',
   },
   doctorCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 18,
     paddingVertical: 12,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    shadowColor: '#0D1A2A',
+    shadowColor: isDark ? 'transparent' : '#0D1A2A',
     shadowOpacity: 0.04,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
@@ -1047,7 +1120,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EDF2FA',
+    backgroundColor: isDark ? 'rgba(234,240,255,0.10)' : '#EDF2FA',
   },
   doctorInfo: {
     flex: 1,
@@ -1056,15 +1129,15 @@ const styles = StyleSheet.create({
   doctorCardName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#1D2739',
+    color: colors.text,
   },
   doctorCardSpecialty: {
     fontSize: 12,
-    color: '#A1ADBF',
+    color: colors.subtext,
     marginTop: 2,
   },
   changeDoctorText: {
-    color: '#2F6CCB',
+    color: colors.primary,
     fontWeight: '600',
     fontSize: 14,
   },
@@ -1075,23 +1148,23 @@ const styles = StyleSheet.create({
   },
   doctorPill: {
     borderWidth: 1,
-    borderColor: '#E2EAF4',
+    borderColor: colors.border,
     borderRadius: 999,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
   doctorPillSelected: {
-    borderColor: '#326CC6',
-    backgroundColor: '#EAF2FF',
+    borderColor: colors.primary,
+    backgroundColor: colors.pillBg,
   },
   doctorPillText: {
-    color: '#4D5E79',
+    color: colors.subtext,
     fontSize: 13,
     fontWeight: '500',
   },
   doctorPillTextSelected: {
-    color: '#2E67BE',
+    color: colors.primary,
     fontWeight: '700',
   },
   dateChipsRow: {
@@ -1105,23 +1178,23 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E5ECF6',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 0,
   },
   dateChipSelected: {
-    backgroundColor: '#4E85DD',
+    backgroundColor: colors.primary,
     borderColor: 'transparent',
-    shadowColor: '#2F6CCB',
+    shadowColor: isDark ? 'transparent' : colors.primary,
     shadowOpacity: 0.12,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
   dateChipDay: {
-    color: '#8B98AE',
+    color: colors.subtext,
     fontSize: 10,
     fontWeight: '600',
   },
@@ -1129,7 +1202,7 @@ const styles = StyleSheet.create({
     color: '#E6F0FF',
   },
   dateChipNumber: {
-    color: '#2D3D56',
+    color: colors.text,
     fontSize: 19,
     fontWeight: '700',
     lineHeight: 22,
@@ -1138,7 +1211,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   dateChipMonth: {
-    color: '#9AA7BB',
+    color: colors.subtext,
     fontSize: 10,
     fontWeight: '600',
     marginTop: -1,
@@ -1147,7 +1220,7 @@ const styles = StyleSheet.create({
     color: '#E6F0FF',
   },
   noSlotsText: {
-    color: '#7A869B',
+    color: colors.subtext,
     fontSize: 13,
     marginTop: -6,
   },
@@ -1162,19 +1235,19 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E5ECF6',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 1,
   },
   slotChipSelected: {
-    borderColor: '#2F6CCB',
-    backgroundColor: '#2F6CCB',
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
   },
   slotTimeText: {
-    color: '#22324A',
+    color: colors.text,
     fontWeight: '700',
     fontSize: 13,
   },
@@ -1190,7 +1263,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   slotTimeTextDisabled: {
-    color: '#98A5BA',
+    color: colors.subtext,
   },
   modalFooter: {
     position: 'absolute',
@@ -1200,8 +1273,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 14,
     paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#0D1A2A',
+    backgroundColor: colors.card,
+    shadowColor: isDark ? 'transparent' : '#0D1A2A',
     shadowOpacity: 0.07,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: -3 },
@@ -1210,10 +1283,10 @@ const styles = StyleSheet.create({
   confirmButton: {
     height: 56,
     borderRadius: 20,
-    backgroundColor: '#2F6CCB',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0D1A2A',
+    shadowColor: isDark ? 'transparent' : '#0D1A2A',
     shadowOpacity: 0.14,
     shadowRadius: 9,
     shadowOffset: { width: 0, height: 4 },
@@ -1221,7 +1294,7 @@ const styles = StyleSheet.create({
   },
   confirmButtonDisabled: {
     opacity: 1,
-    backgroundColor: '#B9D1F5',
+    backgroundColor: colors.pillBg,
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -1236,7 +1309,7 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   closeText: {
-    color: '#7B889D',
+    color: colors.subtext,
     fontSize: 13,
     fontWeight: '500',
   },
@@ -1249,12 +1322,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   calendarTriggerText: {
-    color: '#2F6CCB',
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '600',
   },
   selectedDateText: {
-    color: '#7C899E',
+    color: colors.subtext,
     fontSize: 12,
     marginTop: 2,
   },
@@ -1266,7 +1339,7 @@ const styles = StyleSheet.create({
   },
   calendarCard: {
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     padding: 14,
     gap: 10,
   },
@@ -1279,12 +1352,12 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#F1F5FB',
+    backgroundColor: isDark ? 'rgba(234,240,255,0.08)' : '#F1F5FB',
     alignItems: 'center',
     justifyContent: 'center',
   },
   calendarTitle: {
-    color: '#24344B',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
     textTransform: 'capitalize',
@@ -1297,7 +1370,7 @@ const styles = StyleSheet.create({
   calendarWeekDayLabel: {
     width: '14.28%',
     textAlign: 'center',
-    color: '#97A4B7',
+    color: colors.subtext,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -1316,10 +1389,10 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   calendarDaySelected: {
-    backgroundColor: '#2F6CCB',
+    backgroundColor: colors.primary,
   },
   calendarDayText: {
-    color: '#2D3D56',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '600',
   },
